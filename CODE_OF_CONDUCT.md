@@ -20,7 +20,7 @@ Flipper-ARF is an automotive security research project. All contributions, discu
 
 5. **Authorized captures only.** Signal captures and key recordings submitted to the project should come from researcher-owned vehicles or devices, or be obtained with explicit written permission from the owner.
 
-6. **No enabling of criminal activity.** Do not contribute code, documentation, or techniques designed to enable vehicle theft, unauthorized entry, tracking, surveillance, or any other criminal activity.
+6. **No enabling of criminal activity.** We do not condone/support/endorse vehicle theft, unauthorized entry, tracking, surveillance, or any other criminal activity.
 
 7. **Radio frequency compliance.** Comply with radio frequency regulations in your jurisdiction. Transmission testing should be conducted in controlled environments or within legally permitted parameters.
 
