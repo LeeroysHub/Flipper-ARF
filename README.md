@@ -175,7 +175,54 @@ Contributions are welcome if they:
 > Non-automotive features are considered out-of-scope for now.
 
 ### This code is a mess!
-![Talk is cheap, submit patches](arf_pictures/send_patches.jpeg) 
+![Talk is cheap, submit patches](arf_pictures/send_patches.jpeg)
+---
+
+## Citations & References
+
+The following academic publications have been invaluable to the development and understanding of the protocols implemented in this firmware.
+
+### Automotive RKE Security
+
+- **Lock It and Still Lose It — On the (In)Security of Automotive Remote Keyless Entry Systems**
+  Flavio D. Garcia, David Oswald, Timo Kasper, Pierre Pavlidès
+  *USENIX Security 2016*
+  https://www.usenix.org/system/files/conference/usenixsecurity16/sec16_paper_garcia.pdf
+
+- **Clonable Key Fobs: Analyzing and Breaking RKE Protocols**
+  Roberto Gesteira-Miñarro, Gregorio López, Rafael Palacios
+  *International Journal of Information Security, Springer, May 2025, 24(3)*
+  DOI: [10.1007/s10207-025-01063-7](https://doi.org/10.1007/s10207-025-01063-7)
+
+- **The Role of Cryptographic Techniques in Remote Keyless Entry (RKE) Systems**
+  Jananga Chiran — Sri Lanka Institute of Information Technology
+  *November 2023*
+  DOI: [10.5281/zenodo.14677864](https://doi.org/10.5281/zenodo.14677864)
+
+### Immobiliser & Transponder Systems
+
+- **Dismantling DST80-based Immobiliser Systems**
+  Lennert Wouters, Jan Van den Herrewegen, Flavio D. Garcia, David Oswald, Benedikt Gierlichs, Bart Preneel
+  *IACR Transactions on Cryptographic Hardware and Embedded Systems (TCHES), 2020, Vol. 2*
+  DOI: [10.13154/tches.v2020.i2.99-127](https://doi.org/10.13154/tches.v2020.i2.99-127)
+
+### RFID & Protocol Analysis Tooling
+
+- **A Toolbox for RFID Protocol Analysis**
+  Flavio D. Garcia
+  *IEEE International Conference on RFID, 2012*
+  DOI: [10.1109/rfid.2012.19](https://doi.org/10.1109/rfid.2012.19)
+
+### Relay & Replay Attacks
+
+- **Implementing and Testing RollJam on Software-Defined Radios**
+  *Università di Bologna (UNIBO), CRIS*
+  https://cris.unibo.it/handle/11585/999874
+
+- **Enhanced Vehicular Roll-Jam Attack Using a Known Noise Source**
+  *Inaugural International Symposium on Vehicle Security & Privacy, January 2023*
+  DOI: [10.14722/vehiclesec.2023.23037](https://doi.org/10.14722/vehiclesec.2023.23037)
+
 ---
 
 # Disclaimer
