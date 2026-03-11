@@ -4,18 +4,26 @@
 
 #define TAG "FiatMystery"
 
-//   Fiat Panda "pandarella e tonino":
-//   te_short ~260us, te_long ~520us (Manchester)
+//   Suspected Magneti Marelli BSI keyfob protocol
+//   Found on: Fiat Panda (and possibly other Fiat/Lancia/Alfa ~2003-2012)
+//
+//   RF: 433.92 MHz, Manchester encoding
+//   te_short ~260us, te_long ~520us
 //   Preamble: ~191 short-short pairs (alternating 260us HIGH/LOW)
 //   Gap: ~3126us LOW
 //   Sync: ~2065us HIGH
-//   Data: 86 Manchester bits
-//   Retransmissions: 7-8 per press
+//   Data: 88 Manchester bits (often decoded as 104 with 16-bit 0xFFFF preamble residue)
+//   Retransmissions: 7-10 per press
+//
+//   Frame layout (after stripping 16-bit 0xFFFF preamble):
+//     Bytes 0-3: Fixed ID / Serial (32 bits)
+//     Byte 4:    Button (upper nibble) | Type (lower nibble, always 0x2)
+//     Bytes 5-10: Rolling/encrypted code (48 bits)
 #define FIAT_MYSTERY_PREAMBLE_MIN  200  // Min preamble pulses (100 pairs)
 #define FIAT_MYSTERY_GAP_MIN       2500 // Gap detection threshold (us)
 #define FIAT_MYSTERY_SYNC_MIN      1500 // Sync pulse minimum (us)
 #define FIAT_MYSTERY_SYNC_MAX      2600 // Sync pulse maximum (us)
-#define FIAT_MYSTERY_MAX_DATA_BITS 96   // Max data bits to collect
+#define FIAT_MYSTERY_MAX_DATA_BITS 104  // Max data bits to collect (13 bytes)
 
 static const SubGhzBlockConst subghz_protocol_fiat_mystery_const = {
     .te_short = 260,
@@ -31,7 +39,7 @@ struct SubGhzProtocolDecoderFiatMystery {
     ManchesterState manchester_state;
     uint8_t decoder_state;
     uint16_t preamble_count;
-    uint8_t raw_data[12];    // Up to 96 bits (12 bytes)
+    uint8_t raw_data[13];    // Up to 104 bits (13 bytes)
     uint8_t bit_count;
     uint32_t extra_data;     // Bits beyond first 64, right-aligned
     uint32_t te_last;
@@ -292,13 +300,20 @@ void subghz_protocol_decoder_fiat_mystery_feed(void* context, bool level, uint32
         if(frame_complete) {
             instance->generic.data_count_bit = instance->bit_count;
 
+            // Frame layout: bytes 0-1 are 0xFFFF preamble residue
+            // Bytes 2-5: Fixed ID (serial)
+            // Byte 6: Button (upper nibble) | subtype (lower nibble)
+            // Bytes 7-12: Rolling/encrypted code (48 bits)
             instance->generic.serial =
-                ((uint32_t)instance->raw_data[4] << 24) |
-                ((uint32_t)instance->raw_data[5] << 16) |
-                ((uint32_t)instance->raw_data[6] << 8) |
-                ((uint32_t)instance->raw_data[7]);
-            instance->generic.cnt = (uint32_t)(instance->generic.data >> 32);
-            instance->generic.btn = 0;
+                ((uint32_t)instance->raw_data[2] << 24) |
+                ((uint32_t)instance->raw_data[3] << 16) |
+                ((uint32_t)instance->raw_data[4] << 8) |
+                ((uint32_t)instance->raw_data[5]);
+            instance->generic.btn = (instance->raw_data[6] >> 4) & 0xF;
+            instance->generic.cnt =
+                ((uint32_t)instance->raw_data[7] << 16) |
+                ((uint32_t)instance->raw_data[8] << 8) |
+                ((uint32_t)instance->raw_data[9]);
 
             FURI_LOG_I(
                 TAG,
@@ -385,22 +400,41 @@ SubGhzProtocolStatus subghz_protocol_decoder_fiat_mystery_deserialize(
     return ret;
 }
 
+static const char* fiat_mystery_button_name(uint8_t btn) {
+    switch(btn) {
+    case 0x2:
+        return "Btn A";
+    case 0x4:
+        return "Btn B";
+    default:
+        return "Unknown";
+    }
+}
+
 void subghz_protocol_decoder_fiat_mystery_get_string(void* context, FuriString* output) {
     furi_check(context);
     SubGhzProtocolDecoderFiatMystery* instance = context;
 
     uint8_t total_bytes = (instance->bit_count + 7) / 8;
-    if(total_bytes > 12) total_bytes = 12;
+    if(total_bytes > 13) total_bytes = 13;
 
     furi_string_cat_printf(
         output,
         "%s %dbit\r\n"
-        "Key:%08lX%08lX\r\n"
+        "Sn:%08lX Btn:%s(0x%X)\r\n"
+        "Roll:%02X%02X%02X%02X%02X%02X\r\n"
         "Data:",
         instance->generic.protocol_name,
         instance->bit_count,
-        (uint32_t)(instance->generic.data >> 32),
-        (uint32_t)(instance->generic.data & 0xFFFFFFFF));
+        instance->generic.serial,
+        fiat_mystery_button_name(instance->generic.btn),
+        instance->generic.btn,
+        instance->raw_data[7],
+        instance->raw_data[8],
+        instance->raw_data[9],
+        (total_bytes > 10) ? instance->raw_data[10] : 0,
+        (total_bytes > 11) ? instance->raw_data[11] : 0,
+        (total_bytes > 12) ? instance->raw_data[12] : 0);
 
     for(uint8_t i = 0; i < total_bytes; i++) {
         furi_string_cat_printf(output, "%02X", instance->raw_data[i]);
