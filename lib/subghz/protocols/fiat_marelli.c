@@ -17,8 +17,9 @@
 //
 //   Frame layout (after stripping 16-bit 0xFFFF preamble):
 //     Bytes 0-3: Fixed ID / Serial (32 bits)
-//     Byte 4:    Button (upper nibble) | Type (lower nibble, always 0x2)
-//     Bytes 5-10: Rolling/encrypted code (48 bits)
+//     Byte 4:    Button (upper nibble) | Type (lower nibble)
+//                Buttons: 0x7=Lock, 0xB=Unlock, 0xD=Trunk
+//     Bytes 5-10: Rolling/encrypted code (48 bits)       
 #define FIAT_MARELLI_PREAMBLE_MIN  200  // Min preamble pulses (100 pairs)
 #define FIAT_MARELLI_GAP_MIN       2500 // Gap detection threshold (us)
 #define FIAT_MARELLI_SYNC_MIN      1500 // Sync pulse minimum (us)
@@ -402,10 +403,12 @@ SubGhzProtocolStatus subghz_protocol_decoder_fiat_marelli_deserialize(
 
 static const char* fiat_marelli_button_name(uint8_t btn) {
     switch(btn) {
-    case 0x2:
-        return "Btn A";
-    case 0x4:
-        return "Btn B";
+    case 0x7:
+        return "Lock";
+    case 0xB:
+        return "Unlock";
+    case 0xD:
+        return "Trunk";
     default:
         return "Unknown";
     }
