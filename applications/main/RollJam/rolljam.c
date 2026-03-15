@@ -57,6 +57,11 @@ const char* jam_offset_names[] = {
     "1000 kHz",
 };
 
+const char* hw_names[] = {
+    "CC1101",
+    "Flux Cap",
+};
+
 // ============================================================
 // Scene handlers table (extern declarations in scene header)
 // ============================================================
@@ -119,6 +124,7 @@ static RollJamApp* rolljam_app_alloc(void) {
     app->mod_index = ModIndex_AM650;
     app->jam_offset_index = JamOffIndex_700k;
     app->jam_offset_hz = jam_offset_values[JamOffIndex_700k];
+    app->hw_index = HwIndex_CC1101;
 
     // Services
     app->gui = furi_record_open(RECORD_GUI);

@@ -41,6 +41,9 @@ void rolljam_scene_attack_phase1_on_enter(void* context) {
     view_dispatcher_switch_to_view(
         app->view_dispatcher, RollJamViewWidget);
 
+    // Configure hardware type
+    rolljam_ext_set_flux_capacitor(app->hw_index == HwIndex_FluxCapacitor);
+
     // Start jamming
     rolljam_jammer_start(app);
 

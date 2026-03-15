@@ -70,6 +70,17 @@ extern const uint32_t jam_offset_values[];
 extern const char* jam_offset_names[];
 
 // ============================================================
+// Hardware type
+// ============================================================
+typedef enum {
+    HwIndex_CC1101 = 0,
+    HwIndex_FluxCapacitor,
+    HwIndex_COUNT,
+} HwIndex;
+
+extern const char* hw_names[];
+
+// ============================================================
 // Scenes
 // ============================================================
 typedef enum {
@@ -133,6 +144,7 @@ typedef struct {
     FreqIndex freq_index;
     ModIndex mod_index;
     JamOffIndex jam_offset_index;
+    HwIndex hw_index;
     uint32_t frequency;
     uint32_t jam_frequency;
     uint32_t jam_offset_hz;

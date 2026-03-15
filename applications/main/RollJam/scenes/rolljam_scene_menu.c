@@ -30,10 +30,18 @@ static void menu_jam_offset_changed(VariableItem* item) {
     variable_item_set_current_value_text(item, jam_offset_names[index]);
 }
 
+static void menu_hw_changed(VariableItem* item) {
+    RollJamApp* app = variable_item_get_context(item);
+    uint8_t index = variable_item_get_current_value_index(item);
+
+    app->hw_index = index;
+    variable_item_set_current_value_text(item, hw_names[index]);
+}
+
 static void menu_enter_callback(void* context, uint32_t index) {
     RollJamApp* app = context;
 
-    if(index == 3) {
+    if(index == 4) {
         view_dispatcher_send_custom_event(
             app->view_dispatcher, RollJamEventStartAttack);
     }
@@ -72,6 +80,16 @@ void rolljam_scene_menu_on_enter(void* context) {
         app);
     variable_item_set_current_value_index(offset_item, app->jam_offset_index);
     variable_item_set_current_value_text(offset_item, jam_offset_names[app->jam_offset_index]);
+
+    // --- Hardware ---
+    VariableItem* hw_item = variable_item_list_add(
+        app->var_item_list,
+        "Hardware",
+        HwIndex_COUNT,
+        menu_hw_changed,
+        app);
+    variable_item_set_current_value_index(hw_item, app->hw_index);
+    variable_item_set_current_value_text(hw_item, hw_names[app->hw_index]);
 
     // --- Start button ---
     variable_item_list_add(

@@ -10,6 +10,12 @@
 
 static bool otg_was_enabled = false;
 
+static bool use_flux_capacitor = false;
+
+void rolljam_ext_set_flux_capacitor(bool enabled) {
+    use_flux_capacitor = enabled;
+}
+
 static void rolljam_ext_power_on(void) {
     otg_was_enabled = furi_hal_power_is_otg_enabled();
     if(!otg_was_enabled) {
@@ -423,7 +429,7 @@ static int32_t jam_thread_worker(void* context) {
         0xAA,0x55
     };
 
-    furi_hal_gpio_write(pin_amp, true);
+    if(use_flux_capacitor) furi_hal_gpio_write(pin_amp, true);
     jam_start_tx(noise_pattern, 62);
 
     uint8_t st = cc_state();
@@ -432,7 +438,7 @@ static int32_t jam_thread_worker(void* context) {
         jam_start_tx(noise_pattern, 62);
         st = cc_state();
         if(st != MARC_TX) {
-            furi_hal_gpio_write(pin_amp, false);
+            if(use_flux_capacitor) furi_hal_gpio_write(pin_amp, false);
             FURI_LOG_E(TAG, "JAM: Cannot enter TX!");
             return -1;
         }
@@ -492,7 +498,7 @@ static int32_t jam_thread_worker(void* context) {
     }
 
     cc_idle();
-    furi_hal_gpio_write(pin_amp, false);
+    if(use_flux_capacitor) furi_hal_gpio_write(pin_amp, false);
     cc_write(CC_IOCFG2, 0x2E);
     FURI_LOG_I(TAG, "JAM: STOPPED (loops=%lu uf=%lu refills=%lu)", loops, underflows, refills);
     return 0;
@@ -512,13 +518,17 @@ void rolljam_ext_gpio_init(void) {
     furi_hal_gpio_write(pin_mosi, false);
     furi_hal_gpio_init(pin_miso, GpioModeInput, GpioPullUp, GpioSpeedVeryHigh);
     furi_hal_gpio_init(pin_gdo0, GpioModeInput, GpioPullDown, GpioSpeedVeryHigh);
-    furi_hal_gpio_init_simple(pin_amp, GpioModeOutputPushPull);
-    furi_hal_gpio_write(pin_amp, false);
+    if(use_flux_capacitor) {
+        furi_hal_gpio_init_simple(pin_amp, GpioModeOutputPushPull);
+        furi_hal_gpio_write(pin_amp, false);
+    }
 }
 
 void rolljam_ext_gpio_deinit(void) {
-    furi_hal_gpio_write(pin_amp, false);
-    furi_hal_gpio_init_simple(pin_amp, GpioModeAnalog);
+    if(use_flux_capacitor) {
+        furi_hal_gpio_write(pin_amp, false);
+        furi_hal_gpio_init_simple(pin_amp, GpioModeAnalog);
+    }
     furi_hal_gpio_init(pin_cs, GpioModeAnalog, GpioPullNo, GpioSpeedLow);
     furi_hal_gpio_init(pin_sck, GpioModeAnalog, GpioPullNo, GpioSpeedLow);
     furi_hal_gpio_init(pin_mosi, GpioModeAnalog, GpioPullNo, GpioSpeedLow);
