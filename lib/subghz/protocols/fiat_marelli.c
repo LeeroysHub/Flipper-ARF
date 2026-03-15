@@ -186,6 +186,17 @@ static void fiat_marelli_rebuild_raw_data(SubGhzProtocolDecoderFiatMarelli* inst
     }
 
     instance->bit_count = instance->generic.data_count_bit;
+
+    // Re-extract protocol fields from raw_data (needed after deserialize)
+    if(instance->bit_count >= 56) {
+        instance->generic.serial =
+            ((uint32_t)instance->raw_data[2] << 24) |
+            ((uint32_t)instance->raw_data[3] << 16) |
+            ((uint32_t)instance->raw_data[4] << 8) |
+            ((uint32_t)instance->raw_data[5]);
+        instance->generic.btn = (instance->raw_data[6] >> 4) & 0xF;
+        instance->generic.cnt = (instance->raw_data[7] >> 3) & 0x1F;
+    }
 }
 
 // Helper: prepare data collection state for Manchester decoding
@@ -534,15 +545,14 @@ void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* 
     furi_string_cat_printf(
         output,
         "%s %dbit Type%s\r\n"
-        "Sn:%08lX Btn:%s(0x%X)\r\n"
-        "Ep:%X Ctr:%d Roll:%02X%02X%02X%02X%02X%02X\r\n"
-        "Data:",
+        "Sn:%08lX Btn:%s\r\n"
+        "Ep:%X Ctr:%02d\r\n"
+        "R:%02X%02X%02X%02X%02X%02X",
         instance->generic.protocol_name,
         instance->bit_count,
         variant,
         instance->generic.serial,
         fiat_marelli_button_name(instance->generic.btn),
-        instance->generic.btn,
         epoch,
         counter,
         instance->raw_data[7],
@@ -551,9 +561,4 @@ void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* 
         (total_bytes > 10) ? instance->raw_data[10] : 0,
         (total_bytes > 11) ? instance->raw_data[11] : 0,
         (total_bytes > 12) ? instance->raw_data[12] : 0);
-
-    for(uint8_t i = 0; i < total_bytes; i++) {
-        furi_string_cat_printf(output, "%02X", instance->raw_data[i]);
-    }
-    furi_string_cat_printf(output, "\r\n");
 }
