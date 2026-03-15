@@ -646,17 +646,17 @@ void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* 
 
     furi_string_cat_printf(
         output,
-        "%s %dbit Type%s\r\n"
+        "%s %dbit\r\n"
         "Sn:%08lX Btn:%s\r\n"
-        "Ep:%X Ctr:%02d\r\n"
+        "Ep:%X Ctr:%02d Type%s\r\n"
         "R:%02X%02X%02X%02X%02X%02X",
         instance->generic.protocol_name,
         instance->bit_count,
-        variant,
         instance->generic.serial,
         fiat_marelli_button_name(instance->generic.btn),
         epoch,
         counter,
+        variant,
         instance->raw_data[7],
         instance->raw_data[8],
         instance->raw_data[9],
