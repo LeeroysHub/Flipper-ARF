@@ -4,7 +4,7 @@
 
 #define TAG "FiatMarelli"
 
-//   Magneti Marelli BSI keyfob protocol
+//   Magneti Marelli BSI keyfob protocol (PCF7946)
 //   Found on: Fiat Panda, Grande Punto (and possibly other Fiat/Lancia/Alfa ~2003-2012)
 //
 //   RF: 433.92 MHz, Manchester encoding
@@ -13,44 +13,25 @@
 //     Type B (e.g. Grande Punto): te_short ~100us, te_long ~200us
 //   TE is auto-detected from preamble pulse averaging.
 //
-//   Preamble: many short-short pairs (alternating TE HIGH/LOW)
-//   Gap: ~12x TE LOW
-//   Sync: ~8x TE HIGH
-//   Data: 103-104 Manchester bits (13 bytes), first 14-16 bits are 0xFFF preamble residue
-//   Retransmissions: 7-10 per press
-//
 //   Frame layout (103-104 bits = 13 bytes):
 //     Bytes 0-1:  0xFFFF/0xFFFC preamble residue
-//     Bytes 2-5:  Fixed ID / Serial (32 bits)
+//     Bytes 2-5:  Serial (32 bits)
 //     Byte 6:     [Button:4 | Epoch:4]
-//                 Button (upper nibble): 0x7=Lock, 0xB=Unlock, 0xD=Trunk
-//                 Epoch (lower nibble): 4-bit counter extension (decrements on counter wrap)
 //     Byte 7:     [Counter:5 | Scramble:2 | Fixed:1]
-//                 Counter: 5-bit plaintext decrementing counter (MSBs of byte)
-//                 Scramble: 2 bits dependent on counter/button/epoch
-//                 LSB: fixed (1 for Type A, 0 for Type B)
 //     Bytes 8-12: Encrypted payload (40 bits)
-//                 Fixed bits: bit 37=0, bit 38=1, bit 47=0 (relative to rolling code)
-//
-//   Full counter: 52 bits = (Epoch << 48) | Rolling_48bit (shared across all buttons)
-//   Cipher: proprietary, ~38 effective encrypted bits, weak MSB diffusion
 
-// Preamble: accept short pulses in this range for auto-TE detection
 #define FIAT_MARELLI_PREAMBLE_PULSE_MIN 50
 #define FIAT_MARELLI_PREAMBLE_PULSE_MAX 350
-#define FIAT_MARELLI_PREAMBLE_MIN       80   // Min preamble pulses before gap detection
-#define FIAT_MARELLI_MAX_DATA_BITS      104  // Max data bits to collect (13 bytes)
-#define FIAT_MARELLI_MIN_DATA_BITS      80   // Min bits for a valid frame
-// Gap/sync relative multipliers (applied to auto-detected te_short)
-#define FIAT_MARELLI_GAP_TE_MULT        4    // Gap > 4 * te_short
-#define FIAT_MARELLI_SYNC_TE_MIN_MULT   4    // Sync >= 4 * te_short
-#define FIAT_MARELLI_SYNC_TE_MAX_MULT   12   // Sync <= 12 * te_short
-// Fallback for retransmission detection (no preamble)
-#define FIAT_MARELLI_RETX_GAP_MIN       5000 // Direct gap detection from Reset (us)
-#define FIAT_MARELLI_RETX_SYNC_MIN      400  // Retx sync min (us)
-#define FIAT_MARELLI_RETX_SYNC_MAX      2800 // Retx sync max (us)
-// TE boundary for variant classification
-#define FIAT_MARELLI_TE_TYPE_AB_BOUNDARY 180  // < 180 = Type B, >= 180 = Type A
+#define FIAT_MARELLI_PREAMBLE_MIN       80
+#define FIAT_MARELLI_MAX_DATA_BITS      104
+#define FIAT_MARELLI_MIN_DATA_BITS      80
+#define FIAT_MARELLI_GAP_TE_MULT        4
+#define FIAT_MARELLI_SYNC_TE_MIN_MULT   4
+#define FIAT_MARELLI_SYNC_TE_MAX_MULT   12
+#define FIAT_MARELLI_RETX_GAP_MIN       5000
+#define FIAT_MARELLI_RETX_SYNC_MIN      400
+#define FIAT_MARELLI_RETX_SYNC_MAX      2800
+#define FIAT_MARELLI_TE_TYPE_AB_BOUNDARY 180
 
 static const SubGhzBlockConst subghz_protocol_fiat_marelli_const = {
     .te_short = 260,
@@ -66,20 +47,23 @@ struct SubGhzProtocolDecoderFiatMarelli {
     ManchesterState manchester_state;
     uint8_t decoder_state;
     uint16_t preamble_count;
-    uint8_t raw_data[13];    // Up to 104 bits (13 bytes)
+    uint8_t raw_data[13];
     uint8_t bit_count;
-    uint32_t extra_data;     // Bits beyond first 64, right-aligned
+    uint32_t extra_data;
     uint32_t te_last;
-    // Auto-TE detection
-    uint32_t te_sum;         // Sum of preamble pulse durations
-    uint16_t te_count;       // Number of preamble pulses averaged
-    uint32_t te_detected;    // Auto-detected te_short (0 = not yet detected)
+    uint32_t te_sum;
+    uint16_t te_count;
+    uint32_t te_detected;
 };
 
 struct SubGhzProtocolEncoderFiatMarelli {
     SubGhzProtocolEncoderBase base;
     SubGhzProtocolBlockEncoder encoder;
     SubGhzBlockGeneric generic;
+    uint8_t raw_data[13];
+    uint32_t extra_data;
+    uint8_t bit_count;
+    uint32_t te_detected;
 };
 
 typedef enum {
@@ -87,12 +71,8 @@ typedef enum {
     FiatMarelliDecoderStepPreamble = 1,
     FiatMarelliDecoderStepSync = 2,
     FiatMarelliDecoderStepData = 3,
-    FiatMarelliDecoderStepRetxSync = 4,  // Waiting for sync after large gap (no preamble)
+    FiatMarelliDecoderStepRetxSync = 4,
 } FiatMarelliDecoderStep;
-
-// ============================================================================
-// PROTOCOL INTERFACE DEFINITIONS
-// ============================================================================
 
 const SubGhzProtocolDecoder subghz_protocol_fiat_marelli_decoder = {
     .alloc = subghz_protocol_decoder_fiat_marelli_alloc,
@@ -117,14 +97,18 @@ const SubGhzProtocol subghz_protocol_fiat_marelli = {
     .name = FIAT_MARELLI_PROTOCOL_NAME,
     .type = SubGhzProtocolTypeDynamic,
     .flag = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
-            SubGhzProtocolFlag_Load | SubGhzProtocolFlag_Save,
+            SubGhzProtocolFlag_Load | SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
     .decoder = &subghz_protocol_fiat_marelli_decoder,
     .encoder = &subghz_protocol_fiat_marelli_encoder,
 };
 
 // ============================================================================
-// ENCODER STUBS (decode-only protocol)
+// Encoder
 // ============================================================================
+
+#define FIAT_MARELLI_ENCODER_UPLOAD_MAX 1500
+#define FIAT_MARELLI_ENCODER_REPEAT     3
+#define FIAT_MARELLI_PREAMBLE_PAIRS     100
 
 void* subghz_protocol_encoder_fiat_marelli_alloc(SubGhzEnvironment* environment) {
     UNUSED(environment);
@@ -132,6 +116,10 @@ void* subghz_protocol_encoder_fiat_marelli_alloc(SubGhzEnvironment* environment)
     furi_check(instance);
     instance->base.protocol = &subghz_protocol_fiat_marelli;
     instance->generic.protocol_name = instance->base.protocol->name;
+    instance->encoder.repeat = FIAT_MARELLI_ENCODER_REPEAT;
+    instance->encoder.size_upload = FIAT_MARELLI_ENCODER_UPLOAD_MAX;
+    instance->encoder.upload = malloc(FIAT_MARELLI_ENCODER_UPLOAD_MAX * sizeof(LevelDuration));
+    furi_check(instance->encoder.upload);
     instance->encoder.is_running = false;
     return instance;
 }
@@ -139,14 +127,142 @@ void* subghz_protocol_encoder_fiat_marelli_alloc(SubGhzEnvironment* environment)
 void subghz_protocol_encoder_fiat_marelli_free(void* context) {
     furi_check(context);
     SubGhzProtocolEncoderFiatMarelli* instance = context;
+    free(instance->encoder.upload);
     free(instance);
+}
+
+// Manchester encoding from decoder FSM:
+//   From Mid1: bit 1 = LOW_TE + HIGH_TE, bit 0 = LOW_2TE
+//   From Mid0: bit 0 = HIGH_TE + LOW_TE, bit 1 = HIGH_2TE
+static bool fiat_marelli_encoder_get_upload(SubGhzProtocolEncoderFiatMarelli* instance) {
+    uint32_t te = instance->te_detected;
+    if(te == 0) te = subghz_protocol_fiat_marelli_const.te_short;
+
+    uint32_t te_short = te;
+    uint32_t te_long = te * 2;
+    uint32_t gap_duration = te * 12;
+    uint32_t sync_duration = te * 8;
+
+    size_t index = 0;
+    size_t max_upload = FIAT_MARELLI_ENCODER_UPLOAD_MAX;
+    uint8_t data_bits = instance->bit_count;
+    if(data_bits == 0) data_bits = instance->generic.data_count_bit;
+    if(data_bits < FIAT_MARELLI_MIN_DATA_BITS || data_bits > FIAT_MARELLI_MAX_DATA_BITS) {
+        return false;
+    }
+
+    for(uint8_t i = 0; i < FIAT_MARELLI_PREAMBLE_PAIRS && (index + 1) < max_upload; i++) {
+        instance->encoder.upload[index++] = level_duration_make(true, te_short);
+        if(i < FIAT_MARELLI_PREAMBLE_PAIRS - 1) {
+            instance->encoder.upload[index++] = level_duration_make(false, te_short);
+        }
+    }
+
+    if(index < max_upload) {
+        instance->encoder.upload[index++] = level_duration_make(false, te_short + gap_duration);
+    }
+
+    if(index < max_upload) {
+        instance->encoder.upload[index++] = level_duration_make(true, sync_duration);
+    }
+
+    bool in_mid1 = true;
+
+    for(uint8_t bit_i = 0; bit_i < data_bits && (index + 1) < max_upload; bit_i++) {
+        uint8_t byte_idx = bit_i / 8;
+        uint8_t bit_pos = 7 - (bit_i % 8);
+        bool data_bit = (instance->raw_data[byte_idx] >> bit_pos) & 1;
+
+        if(in_mid1) {
+            if(data_bit) {
+                instance->encoder.upload[index++] = level_duration_make(false, te_short);
+                instance->encoder.upload[index++] = level_duration_make(true, te_short);
+            } else {
+                instance->encoder.upload[index++] = level_duration_make(false, te_long);
+                in_mid1 = false;
+            }
+        } else {
+            if(data_bit) {
+                instance->encoder.upload[index++] = level_duration_make(true, te_long);
+                in_mid1 = true;
+            } else {
+                instance->encoder.upload[index++] = level_duration_make(true, te_short);
+                instance->encoder.upload[index++] = level_duration_make(false, te_short);
+            }
+        }
+    }
+
+    if(in_mid1) {
+        if(index < max_upload) {
+            instance->encoder.upload[index++] =
+                level_duration_make(false, te_short + gap_duration * 3);
+        }
+    } else {
+        if(index > 0) {
+            instance->encoder.upload[index - 1] =
+                level_duration_make(false, te_short + gap_duration * 3);
+        }
+    }
+
+    instance->encoder.size_upload = index;
+    return index > 0;
+}
+
+static void fiat_marelli_encoder_rebuild_raw_data(SubGhzProtocolEncoderFiatMarelli* instance) {
+    memset(instance->raw_data, 0, sizeof(instance->raw_data));
+
+    uint64_t key = instance->generic.data;
+    for(int i = 0; i < 8; i++) {
+        instance->raw_data[i] = (uint8_t)(key >> (56 - i * 8));
+    }
+
+    uint8_t extra_bits =
+        instance->generic.data_count_bit > 64 ? (instance->generic.data_count_bit - 64) : 0;
+    for(uint8_t i = 0; i < extra_bits && i < 32; i++) {
+        uint8_t byte_idx = 8 + (i / 8);
+        uint8_t bit_pos = 7 - (i % 8);
+        if(instance->extra_data & (1UL << (extra_bits - 1 - i))) {
+            instance->raw_data[byte_idx] |= (1 << bit_pos);
+        }
+    }
+
+    instance->bit_count = instance->generic.data_count_bit;
 }
 
 SubGhzProtocolStatus
     subghz_protocol_encoder_fiat_marelli_deserialize(void* context, FlipperFormat* flipper_format) {
-    UNUSED(context);
-    UNUSED(flipper_format);
-    return SubGhzProtocolStatusError;
+    furi_check(context);
+    SubGhzProtocolEncoderFiatMarelli* instance = context;
+    SubGhzProtocolStatus ret = SubGhzProtocolStatusError;
+
+    do {
+        ret = subghz_block_generic_deserialize(&instance->generic, flipper_format);
+        if(ret != SubGhzProtocolStatusOk) break;
+
+        uint32_t extra = 0;
+        if(flipper_format_read_uint32(flipper_format, "Extra", &extra, 1)) {
+            instance->extra_data = extra;
+        }
+
+        uint32_t te = 0;
+        if(flipper_format_read_uint32(flipper_format, "TE", &te, 1)) {
+            instance->te_detected = te;
+        }
+
+        fiat_marelli_encoder_rebuild_raw_data(instance);
+
+        if(!fiat_marelli_encoder_get_upload(instance)) {
+            ret = SubGhzProtocolStatusErrorEncoderGetUpload;
+            break;
+        }
+
+        instance->encoder.repeat = FIAT_MARELLI_ENCODER_REPEAT;
+        instance->encoder.front = 0;
+        instance->encoder.is_running = true;
+
+    } while(false);
+
+    return ret;
 }
 
 void subghz_protocol_encoder_fiat_marelli_stop(void* context) {
@@ -156,25 +272,38 @@ void subghz_protocol_encoder_fiat_marelli_stop(void* context) {
 }
 
 LevelDuration subghz_protocol_encoder_fiat_marelli_yield(void* context) {
-    UNUSED(context);
-    return level_duration_reset();
+    furi_check(context);
+    SubGhzProtocolEncoderFiatMarelli* instance = context;
+
+    if(instance->encoder.repeat == 0 || !instance->encoder.is_running) {
+        instance->encoder.is_running = false;
+        return level_duration_reset();
+    }
+
+    LevelDuration ret = instance->encoder.upload[instance->encoder.front];
+
+    if(++instance->encoder.front == instance->encoder.size_upload) {
+        if(!subghz_block_generic_global.endless_tx) {
+            instance->encoder.repeat--;
+        }
+        instance->encoder.front = 0;
+    }
+
+    return ret;
 }
 
 // ============================================================================
-// DECODER IMPLEMENTATION
+// Decoder
 // ============================================================================
 
-// Helper: rebuild raw_data[] from generic.data + extra_data
 static void fiat_marelli_rebuild_raw_data(SubGhzProtocolDecoderFiatMarelli* instance) {
     memset(instance->raw_data, 0, sizeof(instance->raw_data));
 
-    // First 64 bits from generic.data
     uint64_t key = instance->generic.data;
     for(int i = 0; i < 8; i++) {
         instance->raw_data[i] = (uint8_t)(key >> (56 - i * 8));
     }
 
-    // Remaining bits from extra_data (right-aligned)
     uint8_t extra_bits =
         instance->generic.data_count_bit > 64 ? (instance->generic.data_count_bit - 64) : 0;
     for(uint8_t i = 0; i < extra_bits && i < 32; i++) {
@@ -187,7 +316,6 @@ static void fiat_marelli_rebuild_raw_data(SubGhzProtocolDecoderFiatMarelli* inst
 
     instance->bit_count = instance->generic.data_count_bit;
 
-    // Re-extract protocol fields from raw_data (needed after deserialize)
     if(instance->bit_count >= 56) {
         instance->generic.serial =
             ((uint32_t)instance->raw_data[2] << 24) |
@@ -199,7 +327,6 @@ static void fiat_marelli_rebuild_raw_data(SubGhzProtocolDecoderFiatMarelli* inst
     }
 }
 
-// Helper: prepare data collection state for Manchester decoding
 static void fiat_marelli_prepare_data(SubGhzProtocolDecoderFiatMarelli* instance) {
     instance->bit_count = 0;
     instance->extra_data = 0;
@@ -249,12 +376,9 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
     furi_check(context);
     SubGhzProtocolDecoderFiatMarelli* instance = context;
 
-    // Use auto-detected TE if available, otherwise fall back to defaults
     uint32_t te_short = instance->te_detected ? instance->te_detected
                                               : (uint32_t)subghz_protocol_fiat_marelli_const.te_short;
     uint32_t te_long = te_short * 2;
-    // Delta = te_short/2: maximum that avoids short/long overlap (boundary at 1.5*TE).
-    // Must be this wide for Type B asymmetric timing (pos~140us, neg~68us, avg~100us).
     uint32_t te_delta = te_short / 2;
     if(te_delta < 30) te_delta = 30;
     uint32_t diff;
@@ -262,7 +386,6 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
     switch(instance->decoder_state) {
     case FiatMarelliDecoderStepReset:
         if(level) {
-            // Check for preamble-like short HIGH pulse (50-350us range)
             if(duration >= FIAT_MARELLI_PREAMBLE_PULSE_MIN &&
                duration <= FIAT_MARELLI_PREAMBLE_PULSE_MAX) {
                 instance->decoder_state = FiatMarelliDecoderStepPreamble;
@@ -272,7 +395,6 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
                 instance->te_last = duration;
             }
         } else {
-            // Large LOW gap without preamble -> retransmission path
             if(duration > FIAT_MARELLI_RETX_GAP_MIN) {
                 instance->decoder_state = FiatMarelliDecoderStepRetxSync;
                 instance->te_last = duration;
@@ -283,20 +405,16 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
     case FiatMarelliDecoderStepPreamble:
         if(duration >= FIAT_MARELLI_PREAMBLE_PULSE_MIN &&
            duration <= FIAT_MARELLI_PREAMBLE_PULSE_MAX) {
-            // Short pulse (HIGH or LOW) - preamble continues
             instance->preamble_count++;
             instance->te_sum += duration;
             instance->te_count++;
             instance->te_last = duration;
         } else if(!level) {
-            // Non-short LOW pulse - could be gap after preamble
             if(instance->preamble_count >= FIAT_MARELLI_PREAMBLE_MIN && instance->te_count > 0) {
-                // Compute auto-detected TE from preamble average
                 instance->te_detected = instance->te_sum / instance->te_count;
                 uint32_t gap_threshold = instance->te_detected * FIAT_MARELLI_GAP_TE_MULT;
 
                 if(duration > gap_threshold) {
-                    // Gap detected - wait for sync
                     instance->decoder_state = FiatMarelliDecoderStepSync;
                     instance->te_last = duration;
                 } else {
@@ -306,13 +424,11 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
                 instance->decoder_state = FiatMarelliDecoderStepReset;
             }
         } else {
-            // Non-short HIGH pulse during preamble - reset
             instance->decoder_state = FiatMarelliDecoderStepReset;
         }
         break;
 
     case FiatMarelliDecoderStepSync: {
-        // Expect sync HIGH pulse (scaled to detected TE)
         uint32_t sync_min = instance->te_detected * FIAT_MARELLI_SYNC_TE_MIN_MULT;
         uint32_t sync_max = instance->te_detected * FIAT_MARELLI_SYNC_TE_MAX_MULT;
 
@@ -326,14 +442,10 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
     }
 
     case FiatMarelliDecoderStepRetxSync:
-        // Retransmission path: expect sync HIGH pulse after large gap
-        // Use broad range since we don't know TE yet
         if(level && duration >= FIAT_MARELLI_RETX_SYNC_MIN &&
            duration <= FIAT_MARELLI_RETX_SYNC_MAX) {
-            // Auto-detect TE from sync pulse (sync is ~8x TE)
             if(!instance->te_detected) {
                 instance->te_detected = duration / 8;
-                // Clamp to reasonable range
                 if(instance->te_detected < 70) instance->te_detected = 100;
                 if(instance->te_detected > 350) instance->te_detected = 260;
             }
@@ -348,7 +460,6 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
         ManchesterEvent event = ManchesterEventReset;
         bool frame_complete = false;
 
-        // Classify duration as short or long Manchester edge using detected TE
         diff = (duration > te_short) ? (duration - te_short) : (te_short - duration);
         if(diff < te_delta) {
             event = level ? ManchesterEventShortLow : ManchesterEventShortHigh;
@@ -399,18 +510,12 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
         if(frame_complete) {
             instance->generic.data_count_bit = instance->bit_count;
 
-            // Frame layout: bytes 0-1 are preamble residue (0xFFFF or 0xFFFC)
-            // Bytes 2-5: Fixed ID (serial)
-            // Byte 6: [Button:4 | Epoch:4]
-            // Byte 7: [Counter:5 | Scramble:2 | Fixed:1]
-            // Bytes 8-12: Encrypted payload (40 bits)
             instance->generic.serial =
                 ((uint32_t)instance->raw_data[2] << 24) |
                 ((uint32_t)instance->raw_data[3] << 16) |
                 ((uint32_t)instance->raw_data[4] << 8) |
                 ((uint32_t)instance->raw_data[5]);
             instance->generic.btn = (instance->raw_data[6] >> 4) & 0xF;
-            // cnt: 5-bit plaintext counter from byte 7 upper bits
             instance->generic.cnt = (instance->raw_data[7] >> 3) & 0x1F;
 
             const char* variant = (instance->te_detected &&
@@ -471,16 +576,13 @@ SubGhzProtocolStatus subghz_protocol_decoder_fiat_marelli_serialize(
         subghz_block_generic_serialize(&instance->generic, flipper_format, preset);
 
     if(ret == SubGhzProtocolStatusOk) {
-        // Save extra data (bits 64+ right-aligned in uint32_t)
         flipper_format_write_uint32(flipper_format, "Extra", &instance->extra_data, 1);
 
-        // Save total bit count explicitly (generic serialize also saves it, but Extra needs context)
         uint32_t extra_bits = instance->generic.data_count_bit > 64
                                   ? (instance->generic.data_count_bit - 64)
                                   : 0;
         flipper_format_write_uint32(flipper_format, "Extra_bits", &extra_bits, 1);
 
-        // Save detected TE for variant identification on reload
         uint32_t te = instance->te_detected;
         flipper_format_write_uint32(flipper_format, "TE", &te, 1);
     }

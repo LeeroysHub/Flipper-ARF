@@ -31,7 +31,7 @@ SubGhzProtocolStatus
     subghz_protocol_decoder_fiat_marelli_deserialize(void* context, FlipperFormat* flipper_format);
 void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* output);
 
-// Encoder stubs 
+// Encoder (replay of captured frames)
 void* subghz_protocol_encoder_fiat_marelli_alloc(SubGhzEnvironment* environment);
 void subghz_protocol_encoder_fiat_marelli_free(void* context);
 SubGhzProtocolStatus
