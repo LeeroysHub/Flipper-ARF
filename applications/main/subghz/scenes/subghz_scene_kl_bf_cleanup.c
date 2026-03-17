@@ -3,7 +3,9 @@
 
 typedef struct {
     uint32_t serial;
+    uint32_t fix;
     uint32_t hop;
+    uint32_t hop2;
     uint8_t btn;
     uint16_t disc;
     size_t bf_indices[32];
@@ -12,13 +14,25 @@ typedef struct {
     size_t valid_count;
 } KlCleanupCtx;
 
-static bool kl_cleanup_validate_key(uint64_t key, uint32_t hop, uint8_t btn, uint16_t disc) {
+static bool kl_cleanup_validate_hop(uint64_t key, uint32_t hop, uint8_t btn, uint16_t disc) {
     uint32_t dec = subghz_protocol_keeloq_common_decrypt(hop, key);
     if((dec >> 28) != btn) return false;
     uint16_t dec_disc = (dec >> 16) & 0x3FF;
     if(dec_disc == disc) return true;
     if((dec_disc & 0xFF) == (disc & 0xFF)) return true;
     return false;
+}
+
+static bool kl_cleanup_validate_key(uint64_t key, uint32_t hop1, uint32_t hop2, uint8_t btn, uint16_t disc) {
+    if(!kl_cleanup_validate_hop(key, hop1, btn, disc)) return false;
+    if(hop2 == 0) return true;
+    if(!kl_cleanup_validate_hop(key, hop2, btn, disc)) return false;
+    uint32_t dec1 = subghz_protocol_keeloq_common_decrypt(hop1, key);
+    uint32_t dec2 = subghz_protocol_keeloq_common_decrypt(hop2, key);
+    uint16_t cnt1 = dec1 & 0xFFFF;
+    uint16_t cnt2 = dec2 & 0xFFFF;
+    int diff = (int)cnt2 - (int)cnt1;
+    return (diff >= 1 && diff <= 256);
 }
 
 void subghz_scene_kl_bf_cleanup_on_enter(void* context) {
@@ -32,14 +46,18 @@ void subghz_scene_kl_bf_cleanup_on_enter(void* context) {
 
     uint8_t key_data[8] = {0};
     if(flipper_format_read_hex(fff, "Key", key_data, 8)) {
-        uint32_t fix = ((uint32_t)key_data[0] << 24) | ((uint32_t)key_data[1] << 16) |
-                       ((uint32_t)key_data[2] << 8) | key_data[3];
+        ctx->fix = ((uint32_t)key_data[0] << 24) | ((uint32_t)key_data[1] << 16) |
+                   ((uint32_t)key_data[2] << 8) | key_data[3];
         ctx->hop = ((uint32_t)key_data[4] << 24) | ((uint32_t)key_data[5] << 16) |
                    ((uint32_t)key_data[6] << 8) | key_data[7];
-        ctx->serial = fix & 0x0FFFFFFF;
-        ctx->btn = fix >> 28;
+        ctx->serial = ctx->fix & 0x0FFFFFFF;
+        ctx->btn = ctx->fix >> 28;
         ctx->disc = ctx->serial & 0x3FF;
     }
+
+    ctx->hop2 = 0;
+    flipper_format_rewind(fff);
+    flipper_format_read_uint32(fff, "Hop2", &ctx->hop2, 1);
 
     scene_manager_set_scene_state(
         subghz->scene_manager, SubGhzSceneKlBfCleanup, (uint32_t)(uintptr_t)ctx);
@@ -48,9 +66,8 @@ void subghz_scene_kl_bf_cleanup_on_enter(void* context) {
         subghz->keeloq_keys_manager = subghz_keeloq_keys_alloc();
     }
 
-    char prefix[16];
-    snprintf(prefix, sizeof(prefix), "BF_%07lX_", ctx->serial);
-    size_t prefix_len = strlen(prefix);
+    char bf_name[24];
+    snprintf(bf_name, sizeof(bf_name), "BF_%07lX", ctx->serial);
 
     size_t user_count = subghz_keeloq_keys_user_count(subghz->keeloq_keys_manager);
     ctx->bf_count = 0;
@@ -60,9 +77,9 @@ void subghz_scene_kl_bf_cleanup_on_enter(void* context) {
         SubGhzKey* k = subghz_keeloq_keys_get(subghz->keeloq_keys_manager, i);
         if(!k || !k->name) continue;
         const char* name = furi_string_get_cstr(k->name);
-        if(strncmp(name, prefix, prefix_len) == 0) {
+        if(strcmp(name, bf_name) == 0) {
             ctx->bf_indices[ctx->bf_count] = i;
-            if(kl_cleanup_validate_key(k->key, ctx->hop, ctx->btn, ctx->disc)) {
+            if(kl_cleanup_validate_key(k->key, ctx->hop, ctx->hop2, ctx->btn, ctx->disc)) {
                 ctx->valid_indices[ctx->valid_count++] = i;
             }
             ctx->bf_count++;
@@ -83,26 +100,11 @@ void subghz_scene_kl_bf_cleanup_on_enter(void* context) {
                 deleted++;
             }
         }
-
-        char new_name[24];
-        snprintf(new_name, sizeof(new_name), "BF_%07lX", ctx->serial);
-
-        size_t new_user_count = subghz_keeloq_keys_user_count(subghz->keeloq_keys_manager);
-        for(size_t i = 0; i < new_user_count; i++) {
-            SubGhzKey* k = subghz_keeloq_keys_get(subghz->keeloq_keys_manager, i);
-            if(!k || !k->name) continue;
-            const char* n = furi_string_get_cstr(k->name);
-            if(strncmp(n, prefix, prefix_len) == 0) {
-                subghz_keeloq_keys_set(
-                    subghz->keeloq_keys_manager, i, k->key, k->type, new_name);
-                break;
-            }
-        }
         subghz_keeloq_keys_save(subghz->keeloq_keys_manager);
 
         furi_string_printf(msg,
             "Cleaned %u keys.\nKept valid key:\n%s",
-            deleted, new_name);
+            deleted, bf_name);
     } else if(ctx->valid_count == 0) {
         furi_string_printf(msg,
             "%u BF keys found\nbut none validates\nhop. Kept all.",

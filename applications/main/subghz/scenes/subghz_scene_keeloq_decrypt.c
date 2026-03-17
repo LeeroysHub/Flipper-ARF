@@ -1,6 +1,9 @@
 #include "../subghz_i.h"
+#include "../helpers/subghz_txrx_i.h"
 #include <lib/subghz/protocols/keeloq.h>
 #include <lib/subghz/protocols/keeloq_common.h>
+#include <lib/subghz/environment.h>
+#include <lib/subghz/subghz_keystore.h>
 #include <furi.h>
 #include <bt/bt_service/bt.h>
 
@@ -77,14 +80,22 @@ static void kl_ble_data_received(uint8_t* data, uint16_t size, void* context) {
             if(!ctx->subghz->keeloq_keys_manager) {
                 ctx->subghz->keeloq_keys_manager = subghz_keeloq_keys_alloc();
             }
-            char key_name[32];
-            snprintf(key_name, sizeof(key_name), "BF_%07lX_%lu", ctx->serial, ctx->candidate_count);
+            char key_name[24];
+            snprintf(key_name, sizeof(key_name), "BF_%07lX", ctx->serial);
             subghz_keeloq_keys_add(
                 ctx->subghz->keeloq_keys_manager,
                 mfkey,
                 learn_type,
                 key_name);
             subghz_keeloq_keys_save(ctx->subghz->keeloq_keys_manager);
+
+            SubGhzKeystore* env_ks = subghz_environment_get_keystore(
+                ctx->subghz->txrx->environment);
+            SubGhzKeyArray_t* env_arr = subghz_keystore_get_data(env_ks);
+            SubGhzKey* entry = SubGhzKeyArray_push_raw(*env_arr);
+            entry->name = furi_string_alloc_set(key_name);
+            entry->key = mfkey;
+            entry->type = learn_type;
 
         } else if(found == 2) {
             ctx->success = (ctx->candidate_count > 0);
@@ -112,6 +123,11 @@ static void kl_ble_data_received(uint8_t* data, uint16_t size, void* context) {
                 uint32_t cnt_val = ctx->recovered_cnt;
                 flipper_format_rewind(fff);
                 flipper_format_insert_or_update_uint32(fff, "Cnt", &cnt_val, 1);
+
+                if(ctx->hop2 != 0) {
+                    flipper_format_rewind(fff);
+                    flipper_format_insert_or_update_uint32(fff, "Hop2", &ctx->hop2, 1);
+                }
             }
 
             view_dispatcher_send_custom_event(ctx->subghz->view_dispatcher, KL_DECRYPT_EVENT_DONE);
@@ -219,10 +235,12 @@ bool subghz_scene_keeloq_decrypt_on_event(void* context, SceneManagerEvent event
             subghz->keeloq_bf2.sig2_loaded = false;
 
             if(ctx->success) {
-                subghz_save_protocol_to_file(
-                    subghz,
-                    subghz_txrx_get_fff_data(subghz->txrx),
-                    furi_string_get_cstr(subghz->file_path));
+                if(subghz_path_is_file(subghz->file_path)) {
+                    subghz_save_protocol_to_file(
+                        subghz,
+                        subghz_txrx_get_fff_data(subghz->txrx),
+                        furi_string_get_cstr(subghz->file_path));
+                }
 
                 subghz_view_keeloq_decrypt_set_result(
                     subghz->subghz_keeloq_decrypt, true, furi_string_get_cstr(ctx->result));
@@ -242,13 +260,8 @@ bool subghz_scene_keeloq_decrypt_on_event(void* context, SceneManagerEvent event
                 uint8_t cancel_msg = KL_MSG_BF_CANCEL;
                 bt_custom_data_tx(bt, &cancel_msg, 1);
                 furi_record_close(RECORD_BT);
-                kl_ble_cleanup(ctx);
             }
             ctx->cancel = true;
-            furi_string_free(ctx->result);
-            free(ctx);
-            scene_manager_set_scene_state(
-                subghz->scene_manager, SubGhzSceneKeeloqDecrypt, 0);
             scene_manager_previous_scene(subghz->scene_manager);
             return true;
         }
