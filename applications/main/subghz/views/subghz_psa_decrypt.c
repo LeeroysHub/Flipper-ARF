@@ -50,7 +50,7 @@ static void subghz_view_psa_decrypt_draw(Canvas* canvas, void* _model) {
         // Progress bar outline + fill
         canvas_draw_rframe(canvas, 3, 15, 122, 12, 2);
         uint8_t fill = (uint8_t)((uint16_t)model->progress * 116 / 100);
-	    if(fill > 2) {
+        if(fill > 2) {
             canvas_draw_rbox(canvas, 5, 17, fill, 8, 1);
         } else if(fill > 0) {
             canvas_draw_box(canvas, 5, 17, fill, 8);
@@ -92,19 +92,23 @@ static void subghz_view_psa_decrypt_draw(Canvas* canvas, void* _model) {
         // Cancel hint - bottom right
         canvas_draw_str_aligned(canvas, 126, 64, AlignRight, AlignBottom, "Hold BACK");
     } else {
-        // Result screen
-        canvas_set_font(canvas, FontSecondary);
-        if(model->result_str) {
-            elements_multiline_text_aligned(
-                canvas, 0, 0, AlignLeft, AlignTop, furi_string_get_cstr(model->result_str));
+        canvas_set_font(canvas, FontPrimary);
+        canvas_draw_str_aligned(canvas, 64, 4, AlignCenter, AlignTop, "Decrypted!");
+
+	if(model->result_str) {
+            canvas_set_font(canvas, FontSecondary);
+            elements_multiline_text_aligned(canvas, 64, 20, AlignCenter, AlignTop,
+                furi_string_get_cstr(model->result_str));
         }
+
+        elements_button_center(canvas, "Ok");
     }
 }
 
 static bool subghz_view_psa_decrypt_input(InputEvent* event, void* context) {
     SubGhzViewPsaDecrypt* instance = (SubGhzViewPsaDecrypt*)context;
 
-    if(event->key == InputKeyBack) {
+    if(event->key == InputKeyBack || event->key == InputKeyOk) {
         if(instance->callback) {
             instance->callback(SubGhzCustomEventViewTransmitterBack, instance->context);
         }

@@ -2004,7 +2004,7 @@ bool subghz_protocol_psa_decrypt_file(FlipperFormat* flipper_format, FuriString*
 
     if(result_str != NULL) {
         furi_string_printf(result_str,
-            "Decrypted!\nType: %02X\nKey: %08lX",
+            "Type: %02X\nSeed: %08lX",
             instance.decrypted_type,
             instance.decrypted_seed);
     }
