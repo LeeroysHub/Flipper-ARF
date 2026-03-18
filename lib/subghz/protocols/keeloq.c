@@ -1055,10 +1055,10 @@ static uint32_t subghz_protocol_keeloq_check_remote_controller_selector(
                 case KEELOQ_LEARNING_SECURE:
                     bool reset_seed_back = false;
                     if((strcmp(furi_string_get_cstr(manufacture_code->name), "BFT") == 0)) {
-                        if(instance->seed == 0) {
-                            instance->seed = (fix & 0xFFFFFFF);
-                            reset_seed_back = true;
-                        }
+                        //if(instance->seed == 0) {
+                        instance->seed = (fix & 0xFFFFFFF);
+                        reset_seed_back = true;
+                        //}
                     }
                     man = subghz_protocol_keeloq_common_secure_learning(
                         fix, instance->seed, manufacture_code->key);
