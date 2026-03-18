@@ -2,6 +2,7 @@
 #include "../helpers/subghz_txrx_i.h"
 #include <lib/subghz/protocols/keeloq.h>
 #include <lib/subghz/protocols/keeloq_common.h>
+#include <lib/subghz/blocks/math.h>
 #include <lib/subghz/environment.h>
 #include <lib/subghz/subghz_keystore.h>
 #include <furi.h>
@@ -137,10 +138,13 @@ void subghz_scene_keeloq_decrypt_on_enter(void* context) {
 
     uint8_t key_data[8] = {0};
     if(flipper_format_read_hex(fff, "Key", key_data, 8)) {
-        ctx->fix = ((uint32_t)key_data[0] << 24) | ((uint32_t)key_data[1] << 16) |
-                   ((uint32_t)key_data[2] << 8) | key_data[3];
-        ctx->hop = ((uint32_t)key_data[4] << 24) | ((uint32_t)key_data[5] << 16) |
-                   ((uint32_t)key_data[6] << 8) | key_data[7];
+        uint64_t raw = 0;
+        for(uint8_t i = 0; i < 8; i++) {
+            raw = (raw << 8) | key_data[i];
+        }
+        uint64_t reversed = subghz_protocol_blocks_reverse_key(raw, 64);
+        ctx->fix = (uint32_t)(reversed >> 32);
+        ctx->hop = (uint32_t)(reversed & 0xFFFFFFFF);
     }
 
     ctx->serial = ctx->fix & 0x0FFFFFFF;
@@ -188,7 +192,7 @@ bool subghz_scene_keeloq_decrypt_on_event(void* context, SceneManagerEvent event
             subghz_keeloq_keys_add(
                 subghz->keeloq_keys_manager,
                 ctx->recovered_mfkey,
-                ctx->recovered_type,
+                KEELOQ_LEARNING_SIMPLE,
                 key_name);
             subghz_keeloq_keys_save(subghz->keeloq_keys_manager);
 
@@ -198,7 +202,7 @@ bool subghz_scene_keeloq_decrypt_on_event(void* context, SceneManagerEvent event
             SubGhzKey* entry = SubGhzKeyArray_push_raw(*env_arr);
             entry->name = furi_string_alloc_set(key_name);
             entry->key = ctx->recovered_mfkey;
-            entry->type = ctx->recovered_type;
+            entry->type = KEELOQ_LEARNING_SIMPLE;
             return true;
 
         } else if(event.event == KL_DECRYPT_EVENT_DONE) {
@@ -235,11 +239,22 @@ bool subghz_scene_keeloq_decrypt_on_event(void* context, SceneManagerEvent event
                     flipper_format_insert_or_update_uint32(fff, "Hop2", &ctx->hop2, 1);
                 }
 
+                flipper_format_rewind(fff);
+                subghz_protocol_decoder_base_deserialize(
+                    subghz_txrx_get_decoder(subghz->txrx), fff);
+
+                const char* save_path = NULL;
                 if(subghz_path_is_file(subghz->file_path)) {
+                    save_path = furi_string_get_cstr(subghz->file_path);
+                } else if(subghz_path_is_file(subghz->keeloq_bf2.sig1_path)) {
+                    save_path = furi_string_get_cstr(subghz->keeloq_bf2.sig1_path);
+                }
+                if(save_path) {
                     subghz_save_protocol_to_file(
                         subghz,
                         subghz_txrx_get_fff_data(subghz->txrx),
-                        furi_string_get_cstr(subghz->file_path));
+                        save_path);
+                    furi_string_set_str(subghz->file_path, save_path);
                 }
 
                 subghz_view_keeloq_decrypt_set_result(

@@ -1,5 +1,6 @@
 #include "../subghz_i.h"
 #include <lib/subghz/protocols/keeloq.h>
+#include <lib/subghz/blocks/math.h>
 #include <dialogs/dialogs.h>
 
 enum {
@@ -22,10 +23,13 @@ static bool kl_bf2_extract_key(SubGhz* subghz, uint32_t* out_fix, uint32_t* out_
     flipper_format_rewind(fff);
     uint8_t key_data[8] = {0};
     if(!flipper_format_read_hex(fff, "Key", key_data, 8)) return false;
-    *out_fix = ((uint32_t)key_data[0] << 24) | ((uint32_t)key_data[1] << 16) |
-               ((uint32_t)key_data[2] << 8) | key_data[3];
-    *out_hop = ((uint32_t)key_data[4] << 24) | ((uint32_t)key_data[5] << 16) |
-               ((uint32_t)key_data[6] << 8) | key_data[7];
+    uint64_t raw = 0;
+    for(uint8_t i = 0; i < 8; i++) {
+        raw = (raw << 8) | key_data[i];
+    }
+    uint64_t reversed = subghz_protocol_blocks_reverse_key(raw, 64);
+    *out_fix = (uint32_t)(reversed >> 32);
+    *out_hop = (uint32_t)(reversed & 0xFFFFFFFF);
     return true;
 }
 
