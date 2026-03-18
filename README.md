@@ -77,6 +77,7 @@ This project may incorporate, adapt, or build upon **other open-source projects*
 | Somfy Telis | 433 MHz | AM | Yes | Yes | Yes |
 | Somfy Keytis | 433 MHz | AM | Yes | Yes | Yes |
 | Alutech AT-4N | 433 MHz | AM | Yes | Yes | Yes |
+| Keyfinder | 433 MHz | AM | Yes | Yes | No |
 | KingGates Stylo4k | 433 MHz | AM | Yes | Yes | No |
 | Beninca ARC | 433 MHz | AM | Yes | Yes | No |
 | Hormann HSM | 433/868 MHz | AM | Yes | Yes | No |
