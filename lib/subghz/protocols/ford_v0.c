@@ -136,8 +136,11 @@ const SubGhzProtocol subghz_protocol_ford_v0 = {
 // BS CALCULATION
 // BS = (counter_low_byte + 0x6F + (button << 4)) & 0xFF
 // =============================================================================
-static uint8_t ford_v0_calculate_bs(uint32_t count, uint8_t button, uint8_t bs_magic) {
-    return (uint8_t)(((uint16_t)(count & 0xFF)) + bs_magic + (button << 4));
+static uint8_t ford_v0_calculate_bs_from_buf(uint8_t* buf) {
+    // BS = sum of bytes 1..7 of the pre-XOR buffer
+    uint8_t checksum = 0;
+    for(int i = 1; i <= 7; i++) checksum += buf[i];
+    return checksum;
 }
 // =============================================================================
 // CRC FUNCTIONS
@@ -259,8 +262,8 @@ static void decode_ford_v0(
 
     *count = ((buf[5] & 0x0F) << 16) | (buf[6] << 8) | buf[7];
 
-    // Derive per-fob bs_magic constant (inverse of ford_v0_calculate_bs)
-    *bs_magic = (uint8_t)(bs - (*button << 4) - (uint8_t)(*count & 0xFF));
+    // BS is checksum of bytes 1..7 (pre-XOR), stored for verification only
+    *bs_magic = bs; // kept for compatibility, not used in encode
 }
 
 // =============================================================================
@@ -291,6 +294,15 @@ static void encode_ford_v0(
 
     uint8_t count_mid = (count >> 8) & 0xFF;
     uint8_t count_low = count & 0xFF;
+
+    // Pre-XOR buf[6] and buf[7] for checksum calculation
+    uint8_t pre_xor_6 = count_mid;
+    uint8_t pre_xor_7 = count_low;
+    buf[6] = pre_xor_6;
+    buf[7] = pre_xor_7;
+
+    // BS = checksum of bytes 1..7 before XOR
+    bs = ford_v0_calculate_bs_from_buf(buf);
 
     uint8_t post_xor_6 = (count_mid & 0xAA) | (count_low & 0x55);
     uint8_t post_xor_7 = (count_low & 0xAA) | (count_mid & 0x55);
@@ -592,7 +604,8 @@ SubGhzProtocolStatus
 
         instance->button = subghz_protocol_ford_v0_get_btn_code();
 
-        instance->bs = ford_v0_calculate_bs(instance->count, instance->button, instance->bs_magic);
+        // BS is calculated inside encode_ford_v0 from buf[1..7]
+        instance->bs = 0; // will be set by encode_ford_v0
 
         encode_ford_v0(
             header_byte,

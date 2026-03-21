@@ -74,3 +74,5 @@
 #include "suzuki.h"
 #include "mitsubishi_v0.h"
 #include "mazda_siemens.h"
+#include "star_line.h"
+#include "scher_khan.h"
