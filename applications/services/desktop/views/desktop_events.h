@@ -39,8 +39,6 @@ typedef enum {
 
     DesktopSlideshowCompleted,
     DesktopSlideshowPoweroff,
-    DesktopTosAccepted,
-    DesktopTosDeclined,
 
     DesktopHwMismatchExit,
 

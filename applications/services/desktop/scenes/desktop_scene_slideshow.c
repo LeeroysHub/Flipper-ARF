@@ -4,7 +4,6 @@
 #include "../desktop_i.h"
 #include "../views/desktop_view_slideshow.h"
 #include "../views/desktop_events.h"
-#include "desktop_scene.h"
 #include <power/power_service/power.h>
 
 void desktop_scene_slideshow_callback(DesktopEvent event, void* context) {
