@@ -35,3 +35,10 @@ SubGhzProtocolStatus
     subghz_protocol_decoder_scher_khan_deserialize(void* context, FlipperFormat* flipper_format);
 
 void subghz_protocol_decoder_scher_khan_get_string(void* context, FuriString* output);
+
+void* subghz_protocol_encoder_scher_khan_alloc(SubGhzEnvironment* environment);
+void subghz_protocol_encoder_scher_khan_free(void* context);
+SubGhzProtocolStatus
+    subghz_protocol_encoder_scher_khan_deserialize(void* context, FlipperFormat* flipper_format);
+void subghz_protocol_encoder_scher_khan_stop(void* context);
+LevelDuration subghz_protocol_encoder_scher_khan_yield(void* context);

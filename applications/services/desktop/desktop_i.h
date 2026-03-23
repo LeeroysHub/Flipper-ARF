@@ -11,6 +11,8 @@
 #include "views/desktop_view_lock_menu.h"
 #include "views/desktop_view_debug.h"
 #include "views/desktop_view_slideshow.h"
+//#include "views/desktop_view_tos.h"
+
 
 #include <gui/gui.h>
 #include <gui/view_stack.h>

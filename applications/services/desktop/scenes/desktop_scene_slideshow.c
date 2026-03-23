@@ -30,6 +30,7 @@ bool desktop_scene_slideshow_on_event(void* context, SceneManagerEvent event) {
         switch(event.event) {
         case DesktopSlideshowCompleted:
             scene_manager_previous_scene(desktop->scene_manager);
+            //scene_manager_search_and_switch_to_another_scene(desktop->scene_manager, DesktopSceneTos);
             consumed = true;
             break;
         case DesktopSlideshowPoweroff:
