@@ -4,8 +4,11 @@ static uint8_t custom_btn_id = SUBGHZ_CUSTOM_BTN_OK;
 static uint8_t custom_btn_original = 0;
 static uint8_t custom_btn_max_btns = 0;
 static uint8_t controller_programming_mode = PROG_MODE_OFF;
-
 static bool subghz_custom_btn_long = false;
+
+static bool custom_btn_has_pages = false;
+static uint8_t custom_btn_page = 0;
+static uint8_t custom_btn_max_pages = 2;
 
 bool subghz_custom_btn_set(uint8_t btn_id) {
     if(btn_id > custom_btn_max_btns) {
@@ -39,6 +42,9 @@ void subghz_custom_btns_reset(void) {
     controller_programming_mode = PROG_MODE_OFF;
     custom_btn_id = SUBGHZ_CUSTOM_BTN_OK;
     subghz_custom_btn_long = false;
+    custom_btn_has_pages = false;
+    custom_btn_page = 0;
+    custom_btn_max_pages = 2;
 }
 
 bool subghz_custom_btn_is_allowed(void) {
@@ -59,4 +65,28 @@ void subghz_custom_btn_set_long(bool v) {
 
 bool subghz_custom_btn_get_long(void) {
     return subghz_custom_btn_long;
+}
+
+void subghz_custom_btn_set_pages(bool enabled) {
+    custom_btn_has_pages = enabled;
+}
+
+bool subghz_custom_btn_has_pages(void) {
+    return custom_btn_has_pages;
+}
+
+void subghz_custom_btn_set_page(uint8_t page) {
+    custom_btn_page = page;
+}
+
+uint8_t subghz_custom_btn_get_page(void) {
+    return custom_btn_page;
+}
+
+void subghz_custom_btn_set_max_pages(uint8_t n) {
+    custom_btn_max_pages = n;
+}
+
+uint8_t subghz_custom_btn_get_max_pages(void) {
+    return custom_btn_max_pages;
 }

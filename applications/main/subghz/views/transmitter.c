@@ -155,39 +155,68 @@ bool subghz_view_transmitter_input(InputEvent* event, void* context) {
         true);
 
     if(can_be_sent) {
+        // Long press d-pad: set custom btn + long flag (no send here, send happens below)
         if(event->type == InputTypeLong) {
             if(event->key == InputKeyUp) {
                 subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_UP);
                 subghz_custom_btn_set_long(true);
-        } else if(event->key == InputKeyDown) {
-            subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_DOWN);
-            subghz_custom_btn_set_long(true);
-        } else if(event->key == InputKeyLeft) {
-            subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_LEFT);
-            subghz_custom_btn_set_long(true);
-        } else if(event->key == InputKeyRight) {
-            subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_RIGHT);
-            subghz_custom_btn_set_long(true);
+            } else if(event->key == InputKeyDown) {
+                subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_DOWN);
+                subghz_custom_btn_set_long(true);
+            } else if(event->key == InputKeyLeft) {
+                subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_LEFT);
+                subghz_custom_btn_set_long(true);
+            } else if(event->key == InputKeyRight) {
+                subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_RIGHT);
+                subghz_custom_btn_set_long(true);
+            }
         }
-    }
 
-        if(event->key == InputKeyOk && event->type == InputTypePress) {
-            subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_OK);
-            with_view_model(
-                subghz_transmitter->view,
-                SubGhzViewTransmitterModel * model,
-                {
-                    furi_string_reset(model->temp_button_id);
-                    model->draw_temp_button = false;
-                },
-                true);
-            subghz_transmitter->callback(
-                SubGhzCustomEventViewTransmitterSendStart, subghz_transmitter->context);
-            return true;
-        } else if(event->key == InputKeyOk && event->type == InputTypeRelease) {
-            subghz_transmitter->callback(
-                SubGhzCustomEventViewTransmitterSendStop, subghz_transmitter->context);
-            return true;
+        // OK button handling
+        if(event->key == InputKeyOk) {
+            if(event->type == InputTypePress) {
+                if(subghz_custom_btn_has_pages()) {
+                    // Multi-page protocol: cycle pages, do NOT send
+                    uint8_t max_pages = subghz_custom_btn_get_max_pages();
+                    uint8_t next_page = (subghz_custom_btn_get_page() + 1) % max_pages;
+                    subghz_custom_btn_set_page(next_page);
+                    // Reset d-pad selection to OK so display shows original btn
+                    subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_OK);
+                    with_view_model(
+                        subghz_transmitter->view,
+                        SubGhzViewTransmitterModel * model,
+                        {
+                            furi_string_reset(model->temp_button_id);
+                            furi_string_printf(model->temp_button_id, "P%u", next_page + 1);
+                            model->draw_temp_button = true;
+                        },
+                        true);
+                    // Refresh display with new page mapping
+                    subghz_transmitter->callback(
+                        SubGhzCustomEventViewTransmitterPageChange, subghz_transmitter->context);
+                    return true;
+                }
+                // Normal protocol: send original button
+                subghz_custom_btn_set(SUBGHZ_CUSTOM_BTN_OK);
+                with_view_model(
+                    subghz_transmitter->view,
+                    SubGhzViewTransmitterModel * model,
+                    {
+                        furi_string_reset(model->temp_button_id);
+                        model->draw_temp_button = false;
+                    },
+                    true);
+                subghz_transmitter->callback(
+                    SubGhzCustomEventViewTransmitterSendStart, subghz_transmitter->context);
+                return true;
+            } else if(event->type == InputTypeRelease) {
+                // Only stop TX if we actually started it (not a page toggle)
+                if(!subghz_custom_btn_has_pages()) {
+                    subghz_transmitter->callback(
+                        SubGhzCustomEventViewTransmitterSendStop, subghz_transmitter->context);
+                }
+                return true;
+            }
         } // Finish "OK" key processing
 
         if(subghz_custom_btn_is_allowed()) {

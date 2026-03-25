@@ -129,8 +129,16 @@ static const char* scher_khan_btn_name(uint8_t btn) {
     switch(btn) {
     case 0x1: return "Lock";
     case 0x2: return "Unlock";
+    case 0x3: return "Lock+Unlock";
     case 0x4: return "Trunk";
-    case 0x8: return "Aux";
+    case 0x5: return "Lock+Trunk";
+    case 0x6: return "Unlock+Trunk";
+    case 0x7: return "Lk+Ul+Tr";
+    case 0x8: return "Start";
+    case 0x9: return "Lock+Start";
+    case 0xA: return "Unlock+Start";
+    case 0xC: return "Trunk+Start";
+    case 0xF: return "All/Panic";
     default:  return "?";
     }
 }
@@ -145,12 +153,39 @@ static uint8_t scher_khan_btn_to_custom(uint8_t btn) {
     }
 }
 
+// Page 0: Lock(1), Unlock(2), Trunk(4), Start(8)
+// Page 1: Lock+Unlock(3), Lock+Trunk(5), Unlock+Trunk(6), Lk+Ul+Tr(7)
+// Page 2: Lock+Start(9), Unlock+Start(A), Trunk+Start(C), All/Panic(F)
 static uint8_t scher_khan_custom_to_btn(uint8_t custom, uint8_t original_btn) {
-    if(custom == SUBGHZ_CUSTOM_BTN_OK)    return original_btn;
-    if(custom == SUBGHZ_CUSTOM_BTN_UP)    return 0x1;
-    if(custom == SUBGHZ_CUSTOM_BTN_DOWN)  return 0x2;
-    if(custom == SUBGHZ_CUSTOM_BTN_LEFT)  return 0x4;
-    if(custom == SUBGHZ_CUSTOM_BTN_RIGHT) return 0x8;
+    if(custom == SUBGHZ_CUSTOM_BTN_OK) return original_btn;
+
+    uint8_t page = subghz_custom_btn_get_page();
+
+    FURI_LOG_I(TAG, "custom_to_btn: original=0x%02X custom=%u page=%u",
+        original_btn, custom, page);
+
+    if(page == 0) {
+        switch(custom) {
+        case SUBGHZ_CUSTOM_BTN_UP:    return 0x1; // Lock
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return 0x2; // Unlock
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return 0x4; // Trunk
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return 0x8; // Start
+        }
+    } else if(page == 1) {
+        switch(custom) {
+        case SUBGHZ_CUSTOM_BTN_UP:    return 0x3; // Lock+Unlock
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return 0x5; // Lock+Trunk
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return 0x6; // Unlock+Trunk
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return 0x7; // Lk+Ul+Tr
+        }
+    } else {
+        switch(custom) {
+        case SUBGHZ_CUSTOM_BTN_UP:    return 0x9; // Lock+Start
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return 0xA; // Unlock+Start
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return 0xC; // Trunk+Start
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return 0xF; // All/Panic
+        }
+    }
     return original_btn;
 }
 
@@ -524,6 +559,8 @@ SubGhzProtocolStatus
 
         subghz_custom_btn_set_original(scher_khan_btn_to_custom(instance->generic.btn));
         subghz_custom_btn_set_max(4);
+        subghz_custom_btn_set_pages(true);
+        subghz_custom_btn_set_max_pages(3);
 
         uint32_t cnt_temp;
         if(flipper_format_read_uint32(flipper_format, "Cnt", &cnt_temp, 1)) {
@@ -986,6 +1023,8 @@ void subghz_protocol_decoder_scher_khan_get_string(void* context, FuriString* ou
 
     subghz_custom_btn_set_original(scher_khan_btn_to_custom(instance->generic.btn));
     subghz_custom_btn_set_max(4);
+    subghz_custom_btn_set_pages(true);
+        subghz_custom_btn_set_max_pages(3);
 
     furi_string_cat_printf(
         output,

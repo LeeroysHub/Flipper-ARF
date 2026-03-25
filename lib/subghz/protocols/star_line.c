@@ -58,22 +58,48 @@ static uint8_t star_line_custom_to_btn(uint8_t custom, uint8_t original_btn) {
 
 static uint8_t star_line_get_btn_code(uint8_t original_btn) {
     uint8_t custom = subghz_custom_btn_get();
-    bool is_twage = (original_btn & 0x20) != 0;
+    bool is_twage  = (original_btn & 0x20) != 0;
+    uint8_t page   = subghz_custom_btn_get_page();
+
+    FURI_LOG_I(TAG, "get_btn_code: original=0x%02X custom=%u page=%u is_twage=%d",
+        original_btn, custom, page, is_twage);
 
     if(subghz_custom_btn_get_long()) {
         subghz_custom_btn_set_long(false);
-
         switch(custom) {
-        case SUBGHZ_CUSTOM_BTN_UP:    return is_twage ? 0x25 : 0x01;  // Stop / Lock
-        case SUBGHZ_CUSTOM_BTN_DOWN:  return is_twage ? 0x26 : 0x02;  // Extra / Unlock
-        case SUBGHZ_CUSTOM_BTN_LEFT:  return is_twage ? 0x21 : 0x03;  // Lock / Trunk
-        case SUBGHZ_CUSTOM_BTN_RIGHT: return is_twage ? 0x22 : 0x04;  // Unlock / Panic
+        case SUBGHZ_CUSTOM_BTN_UP:    return is_twage ? 0x25 : 0x01;
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return is_twage ? 0x26 : 0x02;
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return is_twage ? 0x21 : 0x03;
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return is_twage ? 0x22 : 0x04;
         default: return original_btn;
         }
     }
 
     if(custom == SUBGHZ_CUSTOM_BTN_OK) return original_btn;
-    return star_line_custom_to_btn(custom, original_btn);
+
+    if(!is_twage) {
+        return star_line_custom_to_btn(custom, original_btn);
+    }
+
+    if(page == 0) {
+        // Page 1:
+        switch(custom) {
+        case SUBGHZ_CUSTOM_BTN_UP:    return 0x21; // Lock
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return 0x22; // Unlock
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return 0x23; // Trunk
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return 0x24; // Start
+        default: return original_btn;
+        }
+    } else {
+        // Page 2:
+        switch(custom) {
+        case SUBGHZ_CUSTOM_BTN_UP:    return 0x25; // Stop
+        case SUBGHZ_CUSTOM_BTN_DOWN:  return 0x26; // Extra
+        case SUBGHZ_CUSTOM_BTN_LEFT:  return 0x21; // Lock
+        case SUBGHZ_CUSTOM_BTN_RIGHT: return 0x22; // Unlock
+        default: return original_btn;
+        }
+    }
 }
 
 static const SubGhzBlockConst subghz_protocol_star_line_const = {
@@ -463,6 +489,8 @@ SubGhzProtocolStatus
 
         subghz_custom_btn_set_original(star_line_btn_to_custom(instance->generic.btn));
         subghz_custom_btn_set_max(4);
+        subghz_custom_btn_set_pages(true);
+        subghz_custom_btn_set_max_pages(2);
 
         uint32_t cnt_temp;
         if(flipper_format_read_uint32(flipper_format, "Cnt", &cnt_temp, 1)) {
@@ -1050,6 +1078,8 @@ void subghz_protocol_decoder_star_line_get_string(void* context, FuriString* out
 
     subghz_custom_btn_set_original(star_line_btn_to_custom(instance->generic.btn));
     subghz_custom_btn_set_max(4);
+    subghz_custom_btn_set_pages(true);
+        subghz_custom_btn_set_max_pages(2);
 
     uint32_t code_found_hi = instance->generic.data >> 32;
     uint32_t code_found_lo = instance->generic.data & 0x00000000ffffffff;

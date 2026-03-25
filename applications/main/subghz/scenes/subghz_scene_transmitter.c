@@ -94,6 +94,10 @@ bool subghz_scene_transmitter_on_event(void* context, SceneManagerEvent event) {
             scene_manager_search_and_switch_to_previous_scene(
                 subghz->scene_manager, SubGhzSceneStart);
             return true;
+        } else if(event.event == SubGhzCustomEventViewTransmitterPageChange) {
+            // Page changed via OK button, refresh display
+            subghz_scene_transmitter_update_data_show(subghz);
+            return true;
         } else if(event.event == SubGhzCustomEventViewTransmitterError) {
             furi_string_set(subghz->error_str, "Protocol not\nfound!");
             scene_manager_next_scene(subghz->scene_manager, SubGhzSceneShowErrorSub);
