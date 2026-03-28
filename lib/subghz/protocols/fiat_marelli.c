@@ -41,6 +41,17 @@
 #define FIAT_MARELLI_RETX_SYNC_MAX      2800
 #define FIAT_MARELLI_TE_TYPE_AB_BOUNDARY 180
 
+static uint8_t fiat_marelli_crc8(const uint8_t* data, size_t len) {
+    uint8_t crc = 0x03;
+    for(size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for(uint8_t b = 0; b < 8; b++) {
+            crc = (crc & 0x80) ? ((crc << 1) ^ 0x01) : (crc << 1);
+        }
+    }
+    return crc;
+}
+
 static const SubGhzBlockConst subghz_protocol_fiat_marelli_const = {
     .te_short = 260,
     .te_long = 520,
@@ -235,6 +246,10 @@ static void fiat_marelli_encoder_rebuild_raw_data(SubGhzProtocolEncoderFiatMarel
     }
 
     instance->bit_count = instance->generic.data_count_bit;
+
+    if(instance->bit_count >= 104) {
+        instance->raw_data[12] = fiat_marelli_crc8(instance->raw_data, 12);
+    }
 }
 
 SubGhzProtocolStatus
@@ -518,16 +533,24 @@ void subghz_protocol_decoder_fiat_marelli_feed(void* context, bool level, uint32
         if(frame_complete) {
             instance->generic.data_count_bit = instance->bit_count;
 
-            instance->generic.serial =
-                ((uint32_t)instance->raw_data[2] << 24) |
-                ((uint32_t)instance->raw_data[3] << 16) |
-                ((uint32_t)instance->raw_data[4] << 8) |
-                ((uint32_t)instance->raw_data[5]);
-            instance->generic.btn = (instance->raw_data[6] >> 4) & 0xF;
-            instance->generic.cnt = (instance->raw_data[7] >> 3) & 0x1F;
+            bool crc_ok = true;
+            if(instance->bit_count >= 104) {
+                uint8_t calc = fiat_marelli_crc8(instance->raw_data, 12);
+                crc_ok = (calc == instance->raw_data[12]);
+            }
 
-            if(instance->base.callback) {
-                instance->base.callback(&instance->base, instance->base.context);
+            if(crc_ok) {
+                instance->generic.serial =
+                    ((uint32_t)instance->raw_data[2] << 24) |
+                    ((uint32_t)instance->raw_data[3] << 16) |
+                    ((uint32_t)instance->raw_data[4] << 8) |
+                    ((uint32_t)instance->raw_data[5]);
+                instance->generic.btn = (instance->raw_data[6] >> 4) & 0xF;
+                instance->generic.cnt = (instance->raw_data[7] >> 3) & 0x1F;
+
+                if(instance->base.callback) {
+                    instance->base.callback(&instance->base, instance->base.context);
+                }
             }
 
             instance->decoder_state = FiatMarelliDecoderStepReset;
@@ -628,9 +651,15 @@ void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* 
     uint8_t scramble = (instance->raw_data[7] >> 1) & 0x3;
     uint8_t fixed    =  instance->raw_data[7] & 0x1;
 
+    const char* crc_str = "";
+    if(instance->bit_count >= 104) {
+        uint8_t calc = fiat_marelli_crc8(instance->raw_data, 12);
+        crc_str = (calc == instance->raw_data[12]) ? " CRC:OK" : " CRC:FAIL";
+    }
+
     furi_string_cat_printf(
         output,
-        "%s %dbit\r\n"
+        "%s %dbit%s\r\n"
         "Enc:%02X%02X%02X%02X%02X Scr:%02X\r\n"
         "Raw:%02X%02X Fixed:%X\r\n"
         "Sn:%08X Cnt:%02X\r\n"
@@ -638,6 +667,7 @@ void subghz_protocol_decoder_fiat_marelli_get_string(void* context, FuriString* 
         "Tp:%s\r\n",
         instance->generic.protocol_name,
         (int)instance->bit_count,
+        crc_str,
         instance->raw_data[8], instance->raw_data[9],
         instance->raw_data[10], instance->raw_data[11],
         instance->raw_data[12],
