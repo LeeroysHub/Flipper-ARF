@@ -758,6 +758,17 @@ void subghz_protocol_decoder_psa_feed(void* context, bool level, uint32_t durati
                         instance->mode_serialize = 0x36;
                     }
 
+                    // Only fire callback if decrypted or validation nibble matches
+                    if(instance->decrypted != 0x50 &&
+                       (instance->validation_field & 0xf) != 0xa) {
+                        instance->decode_data_low = 0;
+                        instance->decode_data_high = 0;
+                        instance->decode_count_bit = 0;
+                        new_state = PSADecoderState0;
+                        instance->state = new_state;
+                        return;
+                    }
+
                     instance->generic.data = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
                     instance->generic.data_count_bit = 64;
                     instance->decoder.decode_data = instance->generic.data;
@@ -1039,6 +1050,17 @@ void subghz_protocol_decoder_psa_feed(void* context, bool level, uint32_t durati
                 } else {
                     instance->decrypted = 0x00;
                     instance->mode_serialize = 0x36;
+                }
+
+                // Only fire callback if decrypted or validation nibble matches
+                if(instance->decrypted != 0x50 &&
+                   (instance->validation_field & 0xf) != 0xa) {
+                    instance->decode_data_low = 0;
+                    instance->decode_data_high = 0;
+                    instance->decode_count_bit = 0;
+                    new_state = PSADecoderState0;
+                    instance->state = new_state;
+                    return;
                 }
 
                 instance->generic.data = ((uint64_t)instance->key1_high << 32) | instance->key1_low;
