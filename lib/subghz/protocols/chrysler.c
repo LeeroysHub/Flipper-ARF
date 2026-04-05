@@ -104,6 +104,10 @@ const SubGhzProtocol subghz_protocol_chrysler = {
     .encoder = &subghz_protocol_chrysler_encoder,
 };
 
+static uint8_t chrysler_reverse_nibble(uint8_t n) {
+    return (uint8_t)(((n & 1) << 3) | ((n & 2) << 1) | ((n & 4) >> 1) | ((n & 8) >> 3));
+}
+
 // Encoder
 
 #define CHRYSLER_ENCODER_UPLOAD_MAX 800
@@ -336,10 +340,6 @@ LevelDuration subghz_protocol_encoder_chrysler_yield(void* context) {
 
 // Decoder
 
-static uint8_t chrysler_reverse_nibble(uint8_t n) {
-    return (uint8_t)(((n & 1) << 3) | ((n & 2) << 1) | ((n & 4) >> 1) | ((n & 8) >> 3));
-}
-
 static void chrysler_parse_data(SubGhzProtocolDecoderChrysler* instance) {
     uint8_t* d = instance->raw_data;
 
@@ -347,18 +347,6 @@ static void chrysler_parse_data(SubGhzProtocolDecoderChrysler* instance) {
     uint8_t cnt = chrysler_reverse_nibble(cnt_raw);
     uint8_t dev_id = d[0] & 0xF;
     uint8_t msb = (d[0] >> 7) & 1;
-
-    uint8_t rolling_nibs[4];
-    uint8_t button_nibs[4];
-    for(int i = 0; i < 4; i++) {
-        if(msb == 0) {
-            rolling_nibs[i] = (d[1 + i] >> 4) & 0xF;
-            button_nibs[i] = d[1 + i] & 0xF;
-        } else {
-            rolling_nibs[i] = d[1 + i] & 0xF;
-            button_nibs[i] = (d[1 + i] >> 4) & 0xF;
-        }
-    }
 
     // Determine button from b1^b6 mask
     uint8_t b1_xor_b6 = d[1] ^ d[6];
