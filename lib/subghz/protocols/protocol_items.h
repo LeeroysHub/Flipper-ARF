@@ -63,6 +63,7 @@
 #include "psa.h"
 #include "fiat_spa.h"
 #include "fiat_marelli.h"
+#include "bmw_cas4.h"
 #include "subaru.h"
 #include "kia_generic.h"
 #include "kia_v0.h"
@@ -78,3 +79,4 @@
 #include "scher_khan.h"
 #include "sheriff_cfm.h"
 #include "honda.h"
+#include "chrysler.h"
