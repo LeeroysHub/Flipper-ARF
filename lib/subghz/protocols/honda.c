@@ -9,26 +9,25 @@
 
 #define TAG "SubGhzProtocolHonda"
 
-static const SubGhzBlockConst subghz_protocol_honda_const = {
-    .te_short = HONDA_TE_SHORT,
-    .te_long  = HONDA_TE_LONG,
-    .te_delta = HONDA_TE_DELTA,
-    .min_count_bit_for_found = HONDA_MIN_BITS,
-};
-
-/* ============================================================================
- * Pandora rolling-code tables (extracted from firmware @ 0xEFDC)
- * Five 16×16 nibble-substitution tables.
- * ==========================================================================*/
+/* ══════════════════════════════════════════════════════════════════════════
+ * Rolling-code tables
+ * ════════════════════════════════════════════════════════════════════════ */
 static const uint8_t honda_table_a[16][16] = { HONDA_TABLE_A };
 static const uint8_t honda_table_b[16][16] = { HONDA_TABLE_B };
 static const uint8_t honda_table_c[16][16] = { HONDA_TABLE_C };
 static const uint8_t honda_table_d[16][16] = { HONDA_TABLE_D };
 static const uint8_t honda_table_e[16][16] __attribute__((unused)) = { HONDA_TABLE_E };
 
-/* ============================================================================
- * Bit-reverse helpers (mirrors Crypto.Util.Bit_Reverse_Byte @ 0x11AD4)
- * ==========================================================================*/
+static const SubGhzBlockConst subghz_protocol_honda_const = {
+    .te_short                = HONDA_TE_SHORT,
+    .te_long                 = HONDA_TE_LONG,
+    .te_delta                = HONDA_TE_DELTA,
+    .min_count_bit_for_found = HONDA_MIN_BITS,
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Bit-reversal helpers
+ * ════════════════════════════════════════════════════════════════════════ */
 static inline uint8_t _bit_rev8(uint8_t v) {
     v = (uint8_t)(((v & 0xF0u) >> 4) | ((v & 0x0Fu) << 4));
     v = (uint8_t)(((v & 0xCCu) >> 2) | ((v & 0x33u) << 2));
@@ -36,39 +35,12 @@ static inline uint8_t _bit_rev8(uint8_t v) {
     return v;
 }
 static inline uint8_t _bit_rev4(uint8_t v) {
-    /* bit-reverse the low 4 bits only */
     return (uint8_t)(_bit_rev8(v & 0x0Fu) >> 4);
 }
 
-/* ============================================================================
- * The 10-byte frame buffer has this layout (matching Pandora RAM):
- *   buf[0]  — header byte  (type_b_header<<4 | button)  or  (button<<4 | serial_hi)
- *   buf[1]  — serial[23:16]
- *   buf[2]  — serial[15:8]
- *   buf[3]  — serial[7:0]  / counter cascade
- *   buf[4]  — {serial_low_nibble, counter[23:20]}  (type-B layout)
- *   buf[5]  — counter[19:12]
- *   buf[6]  — counter[11:4]
- *   buf[7]  — {mode_nibble, counter[3:0]}   mode: 0x2 or 0xC
- *   buf[8]  — checksum (nibble-substituted via tables on each TX)
- *   buf[9]  — extra / padding
- *
- * counter bytes are buf[5], buf[6], buf[7] (with low nibble of buf[7] being
- * the LSN of the counter and the high nibble being the mode indicator).
- *
- * The increment algorithm:
- *   1. bit_rev-increment the low nibble of buf[3] (= counter LSN in Pandora)
- *   2. On overflow, cascade to high nibble of buf[3] then to buf[2]
- *   3. Dispatch on mode nibble (buf[7]>>4):
- *      0x2 → use TABLE_A/TABLE_D for checksum nibble substitution
- *      0xC → use TABLE_B/TABLE_D for checksum nibble substitution, flip mode→0x2
- *      (other branches flip mode and recurse similarly)
- *
- * For the Flipper port:
- * plain +1 on the 24-bit counter with nibble-reversed carry, then re-compute
- * the checksum using the appropriate table pair based on the mode nibble.
- * ==========================================================================*/
-
+/* ══════════════════════════════════════════════════════════════════════════
+ * Frame data structure
+ * ════════════════════════════════════════════════════════════════════════ */
 typedef struct {
     bool     type_b;
     uint8_t  type_b_header;
@@ -76,390 +48,588 @@ typedef struct {
     uint32_t serial;
     uint32_t counter;
     uint8_t  checksum;
-    uint8_t  mode;   /* high nibble of buf[7]: 0x2 or 0xC */
+    uint8_t  mode;
+    uint8_t  hw_mode;
 } HondaFrameData;
 
-/* Build the 10-byte Pandora buffer from a HondaFrameData */
-static void _honda_to_buf(const HondaFrameData* f, uint8_t buf[10]) {
-    buf[9] = 0x00;
+/* ══════════════════════════════════════════════════════════════════════════
+ * Checksum / counter helpers
+ * ════════════════════════════════════════════════════════════════════════ */
+static void _honda_to_buf(const HondaFrameData* f, uint8_t buf[11]) {
+    memset(buf, 0, 11u);
     if(!f->type_b) {
         buf[0] = (uint8_t)((f->button << 4) | ((f->serial >> 24) & 0x0Fu));
         buf[1] = (uint8_t)((f->serial >> 16) & 0xFFu);
-        buf[2] = (uint8_t)((f->serial >> 8)  & 0xFFu);
+        buf[2] = (uint8_t)((f->serial >>  8) & 0xFFu);
         buf[3] = (uint8_t)( f->serial        & 0xFFu);
         buf[4] = (uint8_t)((f->counter >> 16) & 0xFFu);
-        buf[5] = (uint8_t)((f->counter >> 8)  & 0xFFu);
+        buf[5] = (uint8_t)((f->counter >>  8) & 0xFFu);
         buf[6] = (uint8_t)( f->counter        & 0xFFu);
-        /* buf[7]: mode nibble high | counter LSN low — for Type-A counter is in buf[4..6] */
         buf[7] = (uint8_t)((f->mode & 0x0Fu) << 4);
         buf[8] = f->checksum;
     } else {
         buf[0] = (uint8_t)((f->type_b_header << 4) | (f->button & 0x0Fu));
         buf[1] = (uint8_t)((f->serial >> 20) & 0xFFu);
         buf[2] = (uint8_t)((f->serial >> 12) & 0xFFu);
-        buf[3] = (uint8_t)((f->serial >> 4)  & 0xFFu);
-        buf[4] = (uint8_t)(((f->serial & 0x0Fu) << 4) | ((f->counter >> 20) & 0x0Fu));
+        buf[3] = (uint8_t)((f->serial >>  4) & 0xFFu);
+        buf[4] = (uint8_t)(((f->serial & 0x0Fu) << 4) |
+                            ((f->counter >> 20) & 0x0Fu));
         buf[5] = (uint8_t)((f->counter >> 12) & 0xFFu);
-        buf[6] = (uint8_t)((f->counter >> 4)  & 0xFFu);
+        buf[6] = (uint8_t)((f->counter >>  4) & 0xFFu);
         buf[7] = (uint8_t)(((f->mode & 0x0Fu) << 4) | (f->counter & 0x0Fu));
         buf[8] = f->checksum;
     }
 }
 
-/* Uses TABLE_A (or B) for the low nibble and TABLE_D (or A/B high) for the
- * high nibble of buf[8], indexed by bit-reversed nibbles of buf[3] (counter
- * cascade byte) as per the decompilation. */
-static uint8_t _honda_rolling_checksum(const uint8_t buf[10], bool mode_is_c) {
-    uint8_t cnt_byte = buf[3];   /* the cascade/index byte Pandora uses */
+static uint8_t _honda_rolling_checksum(const uint8_t buf[11], bool mode_is_c) {
+    uint8_t cnt_byte  = buf[3];
     uint8_t prev_csum = buf[8];
-
-    /* Choose table pair based on mode (mirrors Pandora's dispatch on buf[7]>>4) */
     const uint8_t (*tbl_lo)[16] = mode_is_c ? honda_table_b : honda_table_a;
     const uint8_t (*tbl_hi)[16] = honda_table_d;
-    const uint8_t (*tbl_perm)[16] = honda_table_c;
-
+    const uint8_t (*tbl_pm)[16] = honda_table_c;
     uint8_t new_lo = prev_csum & 0x0Fu;
     uint8_t new_hi = (prev_csum >> 4) & 0x0Fu;
-
     uint8_t idx = _bit_rev8(cnt_byte) & 0x0Fu;
-
-    /* Low nibble substitution (mirrors inner loop in Pandora decompile) */
-    for(uint8_t row = 0; row < 16; row++) {
+    for(uint8_t row = 0; row < 16u; row++) {
         if(tbl_lo[row][idx] == (prev_csum & 0x0Fu)) {
-            new_lo = tbl_perm[row][idx];
+            new_lo = tbl_pm[row][idx];
             break;
         }
     }
-
-    /* High nibble substitution */
     uint8_t idx_hi = _bit_rev8(cnt_byte >> 4) & 0x0Fu;
-    for(uint8_t row = 0; row < 16; row++) {
+    for(uint8_t row = 0; row < 16u; row++) {
         if(tbl_hi[row][idx_hi] == ((prev_csum >> 4) & 0x0Fu)) {
-            new_hi = tbl_perm[row][idx_hi];
+            new_hi = tbl_pm[row][idx_hi];
             break;
         }
     }
-
     return (uint8_t)((new_hi << 4) | new_lo);
 }
 
-/* Advance counter by 1 using Pandora's bit-reversed nibble arithmetic.
- * counter increment section @ 0xEFF0-0xF090 */
+static uint8_t _honda_xor_checksum(const uint8_t* data, uint8_t len) {
+    uint8_t c = 0;
+    for(uint8_t i = 0; i < len; i++) c ^= data[i];
+    return c;
+}
+
 static void _honda_counter_increment(HondaFrameData* f) {
-    uint8_t buf[10];
+    uint8_t buf[11];
     _honda_to_buf(f, buf);
-
-    /* Pandora increments buf[3] low nibble with bit-reverse carry */
     uint8_t lo = _bit_rev4(buf[3] & 0x0Fu);
-    lo = (lo + 1) & 0x0Fu;
+    lo = (lo + 1u) & 0x0Fu;
     buf[3] = (buf[3] & 0xF0u) | _bit_rev4(lo);
-
-    /* Carry to high nibble of buf[3] when low overflows (was 0xF) */
     if((f->counter & 0x0Fu) == 0x0Fu) {
         uint8_t hi = _bit_rev4((buf[3] >> 4) & 0x0Fu);
-        hi = (hi + 1) & 0x0Fu;
+        hi = (hi + 1u) & 0x0Fu;
         buf[3] = (buf[3] & 0x0Fu) | (uint8_t)(_bit_rev4(hi) << 4);
-
-        /* Carry to buf[2] */
         if(((f->counter >> 4) & 0x0Fu) == 0x0Fu) {
             uint8_t b2lo = _bit_rev4(buf[2] & 0x0Fu);
-            b2lo = (b2lo + 1) & 0x0Fu;
+            b2lo = (b2lo + 1u) & 0x0Fu;
             buf[2] = (buf[2] & 0xF0u) | _bit_rev4(b2lo);
         }
     }
-
-    /* Plain counter +1 */
     f->counter = (f->counter + 1u) & 0x00FFFFFFu;
-
-    /* Mode flip: 0x2 ↔ 0xC (Pandora flips mode nibble each TX cycle) */
     bool mode_was_c = (f->mode == 0xCu);
     f->mode = mode_was_c ? 0x2u : 0xCu;
-
-    /* Recompute checksum using Pandora's table lookup */
     _honda_to_buf(f, buf);
     f->checksum = _honda_rolling_checksum(buf, !mode_was_c);
 }
 
-/* ============================================================================
- * Simple XOR checksum (Type-A static, used for initial decode validation)
- * ==========================================================================*/
-static uint8_t _honda_xor_checksum(const uint8_t* data) {
-    uint8_t c = 0;
-    for(uint8_t i = 0; i < 7; i++) c ^= data[i];
-    return c;
-}
-
-/* ============================================================================
- * Bit helpers
- * ==========================================================================*/
-static uint32_t _bits_get(const uint8_t* data, uint8_t start, uint8_t len) {
-    uint32_t val = 0;
-    for(uint8_t i = 0; i < len; i++) {
-        uint8_t byte_idx = (uint8_t)((start + i) / 8u);
-        uint8_t bit_idx  = (uint8_t)(7u - ((start + i) % 8u));
-        val = (val << 1) | ((data[byte_idx] >> bit_idx) & 1u);
-    }
-    return val;
-}
-
-static void _bits_set(uint8_t* data, uint8_t start, uint8_t len, uint32_t val) {
-    if(!len) return;
-    for(int8_t i = (int8_t)len - 1; i >= 0; i--) {
-        uint8_t pos      = (uint8_t)(start + (uint8_t)i);
-        uint8_t byte_idx = (uint8_t)(pos / 8u);
-        uint8_t bit_idx  = (uint8_t)(7u - (pos % 8u));
-        if(val & 1u)
-            data[byte_idx] |= (uint8_t)(1u << bit_idx);
-        else
-            data[byte_idx] &= (uint8_t)(~(1u << bit_idx));
-        val >>= 1;
-    }
-}
-
-/* ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════
  * Pack / unpack
- * ==========================================================================*/
+ * ════════════════════════════════════════════════════════════════════════ */
 static uint64_t _honda_pack(const HondaFrameData* f) {
-    uint8_t key[8] = {0};
-    key[0] = (uint8_t)(((f->type_b ? 1u : 0u) << 7) |
-                       ((f->type_b_header & 0x07u) << 4) | (f->button & 0x0Fu));
-    key[1] = (uint8_t)((f->serial >> 20) & 0xFFu);
-    key[2] = (uint8_t)((f->serial >> 12) & 0xFFu);
-    key[3] = (uint8_t)((f->serial >> 4)  & 0xFFu);
-    key[4] = (uint8_t)((f->serial & 0x0Fu) << 4);
-    key[5] = (uint8_t)((f->counter >> 16) & 0xFFu);
-    key[6] = (uint8_t)((f->counter >> 8)  & 0xFFu);
-    key[7] = (uint8_t)( f->counter        & 0xFFu);
-
-    uint64_t out = 0;
-    for(int i = 0; i < 8; i++) out = (out << 8) | key[i];
-    return out;
+    uint64_t v = 0;
+    v |= (uint64_t)(f->type_b ? 1u : 0u)           << 63;
+    v |= (uint64_t)(f->type_b_header & 0x07u)       << 60;
+    v |= (uint64_t)(f->button        & 0x0Fu)       << 56;
+    v |= (uint64_t)(f->serial        & 0x0FFFFFFFu) << 28;
+    v |= (uint64_t)(f->counter       & 0x00FFFFFFu) <<  4;
+    v |= (uint64_t)(f->hw_mode       & 0x0Fu);
+    return v;
 }
 
 static void _honda_unpack(uint64_t raw, HondaFrameData* f) {
-    uint8_t key[8];
-    for(int i = 7; i >= 0; i--) {
-        key[i] = (uint8_t)(raw & 0xFFu);
-        raw >>= 8;
-    }
-
-    f->type_b        = (key[0] >> 7) & 0x01u;
-    f->type_b_header = (key[0] >> 4) & 0x07u;
-    f->button        =  key[0]       & 0x0Fu;
-    f->serial  = ((uint32_t)key[1] << 20) | ((uint32_t)key[2] << 12) |
-                 ((uint32_t)key[3] << 4)  | ((uint32_t)(key[4] >> 4) & 0x0Fu);
-    f->counter = ((uint32_t)key[5] << 16) | ((uint32_t)key[6] << 8) | (uint32_t)key[7];
-    f->mode    = 0x2u;   /* default mode; will be set properly on decode */
-
-    /* Recompute XOR checksum */
-    uint8_t fb[8] = {0};
-    if(!f->type_b) {
-        fb[0] = (uint8_t)((f->button << 4) | ((f->serial >> 24) & 0x0Fu));
-        fb[1] = (uint8_t)((f->serial >> 16) & 0xFFu);
-        fb[2] = (uint8_t)((f->serial >> 8)  & 0xFFu);
-        fb[3] = (uint8_t)( f->serial        & 0xFFu);
-        fb[4] = (uint8_t)((f->counter >> 16) & 0xFFu);
-        fb[5] = (uint8_t)((f->counter >> 8)  & 0xFFu);
-        fb[6] = (uint8_t)( f->counter        & 0xFFu);
-    } else {
-        fb[0] = (uint8_t)((f->type_b_header << 4) | (f->button & 0x0Fu));
-        fb[1] = (uint8_t)((f->serial >> 20) & 0xFFu);
-        fb[2] = (uint8_t)((f->serial >> 12) & 0xFFu);
-        fb[3] = (uint8_t)((f->serial >> 4)  & 0xFFu);
-        fb[4] = (uint8_t)(((f->serial & 0x0Fu) << 4) | ((f->counter >> 20) & 0x0Fu));
-        fb[5] = (uint8_t)((f->counter >> 12) & 0xFFu);
-        fb[6] = (uint8_t)((f->counter >> 4)  & 0xFFu);
-    }
-    f->checksum = _honda_xor_checksum(fb);
+    f->type_b        = (raw >> 63) & 0x01u;
+    f->type_b_header = (uint8_t)((raw >> 60) & 0x07u);
+    f->button        = (uint8_t)((raw >> 56) & 0x0Fu);
+    f->serial        = (uint32_t)((raw >> 28) & 0x0FFFFFFFu);
+    f->counter       = (uint32_t)((raw >>  4) & 0x00FFFFFFu);
+    f->hw_mode       = (uint8_t)(raw & 0x0Fu);
+    f->mode          = 0x2u;
+    uint8_t buf[11];
+    _honda_to_buf(f, buf);
+    f->checksum = _honda_xor_checksum(buf, 7u);
 }
 
-/* ============================================================================
- * Decoder state
- * ==========================================================================*/
-#define HONDA_HALF_BIT_BUF 512u
+/* ══════════════════════════════════════════════════════════════════════════
+ * Button mapping
+ * ════════════════════════════════════════════════════════════════════════ */
+uint8_t subghz_protocol_honda_btn_to_custom(uint8_t btn) {
+    switch(btn) {
+    case HONDA_BTN_LOCK:       return 1u;
+    case HONDA_BTN_UNLOCK:     return 2u;
+    case HONDA_BTN_TRUNK:      return 3u;
+    case HONDA_BTN_PANIC:      return 4u;
+    case HONDA_BTN_RSTART:     return 5u;
+    default:                   return 1u;
+    }
+}
+uint8_t subghz_protocol_honda_custom_to_btn(uint8_t custom) {
+    switch(custom) {
+    case 1u: return HONDA_BTN_LOCK;
+    case 2u: return HONDA_BTN_UNLOCK;
+    case 3u: return HONDA_BTN_TRUNK;
+    case 4u: return HONDA_BTN_PANIC;
+    case 5u: return HONDA_BTN_RSTART;
+    default: return HONDA_BTN_LOCK;
+    }
+}
 
-typedef enum {
-    HondaDecoderStepReset = 0,
-    HondaDecoderStepAccumulate,
-} HondaDecoderStep;
+/* ══════════════════════════════════════════════════════════════════════════
+ * TIMING ESTIMATOR
+ * ════════════════════════════════════════════════════════════════════════ */
 
+static void _sort_u32(uint32_t* arr, uint16_t n) {
+    for(uint16_t i = 1; i < n; i++) {
+        uint32_t key = arr[i];
+        int16_t  j   = (int16_t)i - 1;
+        while(j >= 0 && arr[j] > key) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        arr[j + 1] = key;
+    }
+}
+
+static uint32_t _estimate_T(const uint32_t* durations, uint16_t count) {
+    if(count < 4u) return 0u;
+
+    uint32_t tmp[HONDA_FSK_COLLECT_N];
+    uint16_t n = (count < HONDA_FSK_COLLECT_N) ? count : HONDA_FSK_COLLECT_N;
+    for(uint16_t i = 0u; i < n; i++) tmp[i] = durations[i];
+    _sort_u32(tmp, n);
+
+    FURI_LOG_D(TAG, "T-est: n=%u min=%lu med=%lu max=%lu",
+               n,
+               (unsigned long)tmp[0],
+               (unsigned long)tmp[n / 2u],
+               (unsigned long)tmp[n - 1u]);
+
+    uint32_t T = tmp[n / 4u];
+
+    if(T < 40u || T > 800u) {
+        FURI_LOG_D(TAG, "T-est: implausible T=%lu, reject", (unsigned long)T);
+        return 0u;
+    }
+
+    FURI_LOG_I(TAG, "T-est: T=%lu µs (baud~%lu)", (unsigned long)T,
+               (unsigned long)(1000000u / (T * 2u)));
+    return T;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * RAW EDGE BUFFER
+ * ════════════════════════════════════════════════════════════════════════ */
+typedef struct {
+    bool     level;
+    uint32_t duration;
+} HondaEdge;
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * DECODER STATE
+ * ════════════════════════════════════════════════════════════════════════ */
 typedef struct SubGhzProtocolDecoderHonda {
     SubGhzProtocolDecoderBase base;
     SubGhzBlockDecoder        decoder;
     SubGhzBlockGeneric        generic;
 
-    uint8_t  half_bits[HONDA_HALF_BIT_BUF];
-    uint16_t hb_count;
-    uint16_t consecutive_clean;
+    HondaEdge edges[HONDA_RAW_EDGE_BUF];
+    uint16_t  edge_count;
+
+    uint32_t  dur_collect[HONDA_FSK_COLLECT_N];
+    uint16_t  dur_count;
+    uint32_t  T_est;
+
+    uint8_t  hbits[HONDA_MAN_BIT_BUF];
+    uint16_t hbit_count;
 
     HondaFrameData frame;
     bool           frame_valid;
+
+    uint32_t dbg_min_dur;
+    uint32_t dbg_max_dur;
+    uint64_t dbg_sum_dur;
+    uint32_t dbg_dur_count;
 } SubGhzProtocolDecoderHonda;
 
-/* ============================================================================
- * Encoder state
- * ==========================================================================*/
-#define HONDA_ENC_BUF_SIZE 512u
+/* ══════════════════════════════════════════════════════════════════════════
+ * ENCODER STATE
+ * ════════════════════════════════════════════════════════════════════════ */
+#define HONDA_ENC_BUF_SIZE  1024u
 
 typedef struct SubGhzProtocolEncoderHonda {
     SubGhzProtocolEncoderBase   base;
     SubGhzProtocolBlockEncoder  encoder;
     SubGhzBlockGeneric          generic;
-
-    HondaFrameData frame;
-    uint8_t        active_button;
+    HondaFrameData              frame;
+    uint8_t                     active_button;
 } SubGhzProtocolEncoderHonda;
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * Forward declarations
+ * ════════════════════════════════════════════════════════════════════════ */
 const SubGhzProtocolDecoder subghz_protocol_honda_decoder;
 const SubGhzProtocolEncoder subghz_protocol_honda_encoder;
 const SubGhzProtocol        subghz_protocol_honda;
 
-/* ============================================================================
- * Duration classifier
- * Pandora uses TE_SHORT=250us, TE_LONG=480us from Brand_Auto_Honda_TX
- * ==========================================================================*/
-static uint8_t _classify_duration(uint32_t abs_dur) {
-    if(abs_dur >= (HONDA_TE_SHORT - HONDA_TE_DELTA) &&
-       abs_dur <= (HONDA_TE_SHORT + HONDA_TE_DELTA)) return 1;
-    if(abs_dur >= (HONDA_TE_LONG  - HONDA_TE_DELTA) &&
-       abs_dur <= (HONDA_TE_LONG  + HONDA_TE_DELTA)) return 2;
-    if(abs_dur >= (HONDA_TE_SHORT - HONDA_TE_DELTA - 30u) &&
-       abs_dur <= (HONDA_TE_SHORT + HONDA_TE_DELTA + 30u)) return 1;
-    if(abs_dur >= (HONDA_TE_LONG  - HONDA_TE_DELTA - 30u) &&
-       abs_dur <= (HONDA_TE_LONG  + HONDA_TE_DELTA + 30u)) return 2;
-    return 0;
+/* ══════════════════════════════════════════════════════════════════════════
+ * DECODER RESET
+ * ════════════════════════════════════════════════════════════════════════ */
+static void _decoder_reset_burst(SubGhzProtocolDecoderHonda* inst) {
+
+    inst->edge_count  = 0u;
+    inst->dur_count   = 0u;
+    inst->hbit_count  = 0u;
+    inst->dbg_min_dur = 0xFFFFFFFFu;
+    inst->dbg_max_dur = 0u;
+    inst->dbg_sum_dur = 0u;
+    inst->dbg_dur_count = 0u;
 }
 
-/* ============================================================================
- * Manchester decoder
- * ==========================================================================*/
-static bool _honda_try_decode_polarity(SubGhzProtocolDecoderHonda* inst, bool invert) {
-    uint8_t* hb  = inst->half_bits;
-    uint16_t cnt = inst->hb_count;
+static void _decoder_full_reset(SubGhzProtocolDecoderHonda* inst) {
+    _decoder_reset_burst(inst);
+    inst->T_est = 0u;
+}
 
-    int16_t  best_preamble_end = -1;
-    uint16_t preamble_count    = 0;
+/* ══════════════════════════════════════════════════════════════════════════
+ * COLLECT edges into buffer, filter noise
+ * ════════════════════════════════════════════════════════════════════════ */
+static void _collect_edge(SubGhzProtocolDecoderHonda* inst,
+                          bool level, uint32_t duration) {
 
-    for(uint16_t i = 1; i < cnt; i++) {
-        if(hb[i] != hb[i - 1]) {
-            preamble_count++;
-        } else {
-            if(preamble_count >= HONDA_MIN_PREAMBLE_COUNT) {
-                best_preamble_end = (int16_t)i;
-                break;
+    if(duration < HONDA_FSK_DUR_MIN_US || duration > HONDA_FSK_DUR_MAX_US) {
+        return;
+    }
+
+    if(duration < inst->dbg_min_dur) inst->dbg_min_dur = duration;
+    if(duration > inst->dbg_max_dur) inst->dbg_max_dur = duration;
+    inst->dbg_sum_dur += duration;
+    inst->dbg_dur_count++;
+
+    if(inst->edge_count < HONDA_RAW_EDGE_BUF) {
+        inst->edges[inst->edge_count].level    = level;
+        inst->edges[inst->edge_count].duration = duration;
+        inst->edge_count++;
+    }
+
+    if(inst->dur_count < HONDA_FSK_COLLECT_N) {
+        inst->dur_collect[inst->dur_count++] = duration;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * ESTIMATE T from collected durations
+ * ════════════════════════════════════════════════════════════════════════ */
+static bool _update_T_estimate(SubGhzProtocolDecoderHonda* inst) {
+    if(inst->T_est != 0u) return true;
+
+    if(inst->dur_count < HONDA_FSK_COLLECT_N / 2u) {
+        FURI_LOG_D(TAG, "T-est: not enough samples (%u)", inst->dur_count);
+        return false;
+    }
+
+    uint32_t T = _estimate_T(inst->dur_collect, inst->dur_count);
+    if(T == 0u) return false;
+
+    inst->T_est = T;
+    return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * QUANTIZE edges into half-bits
+ * ════════════════════════════════════════════════════════════════════════ */
+
+static bool _quantize_to_halfbits(SubGhzProtocolDecoderHonda* inst) {
+    uint32_t T   = inst->T_est;
+    uint32_t tol = (T * HONDA_FSK_TOL_PCT) / 100u;
+
+    uint32_t lo_1T = T - tol;
+    uint32_t hi_1T = T + tol;
+    uint32_t lo_2T = 2u * T - tol;
+    uint32_t hi_2T = 2u * T + tol;
+
+    FURI_LOG_D(TAG,
+        "Quantize: T=%lu tol=%lu 1T=[%lu,%lu] 2T=[%lu,%lu]",
+        (unsigned long)T,    (unsigned long)tol,
+        (unsigned long)lo_1T, (unsigned long)hi_1T,
+        (unsigned long)lo_2T, (unsigned long)hi_2T);
+
+    inst->hbit_count = 0u;
+    uint16_t anomalies = 0u;
+
+    for(uint16_t i = 0u; i < inst->edge_count; i++) {
+        uint32_t dur = inst->edges[i].duration;
+        uint8_t  lvl = inst->edges[i].level ? 1u : 0u;
+
+        if(dur >= lo_1T && dur <= hi_1T) {
+            if(inst->hbit_count < HONDA_MAN_BIT_BUF)
+                inst->hbits[inst->hbit_count++] = lvl;
+
+        } else if(dur >= lo_2T && dur <= hi_2T) {
+            if(inst->hbit_count + 1u < HONDA_MAN_BIT_BUF) {
+                inst->hbits[inst->hbit_count++] = lvl;
+                inst->hbits[inst->hbit_count++] = lvl;
             }
-            preamble_count = 0;
+        } else {
+            anomalies++;
+            FURI_LOG_D(TAG, "Quantize: anomaly dur=%lu at edge %u",
+                       (unsigned long)dur, i);
         }
     }
 
-    if(best_preamble_end < 0 && preamble_count >= HONDA_MIN_PREAMBLE_COUNT)
-        return false; /* preamble only */
-    if(best_preamble_end < 0)
-        best_preamble_end = 0;
+    uint32_t anomaly_pct = (inst->edge_count > 0u)
+        ? ((uint32_t)anomalies * 100u) / (uint32_t)inst->edge_count
+        : 0u;
 
-    /* Skip same-level at sync */
-    uint16_t i = (uint16_t)best_preamble_end;
-    while(i + 1 < cnt && hb[i] == hb[i + 1]) i++;
+    FURI_LOG_D(TAG,
+        "Quantize: %u edges -> %u half-bits, anomalies=%u (%lu%%)",
+        inst->edge_count,
+        inst->hbit_count,
+        anomalies,
+        (unsigned long)anomaly_pct);
 
-    /* Manchester decode */
-    uint8_t decoded[16] = {0};
-    uint8_t bit_count   = 0;
+    if(anomaly_pct > 30u) {
+        FURI_LOG_D(TAG, "Quantize: too many anomalies -> reject burst");
+        return false;
+    }
 
-    while(i + 1 < cnt && bit_count < 128u) {
-        uint8_t h0 = hb[i];
-        uint8_t h1 = hb[i + 1];
+    return (inst->hbit_count >= HONDA_FSK_MIN_PREAMBLE_BITS * 2u);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * LOG raw half-bit stream for debugging
+ * ════════════════════════════════════════════════════════════════════════ */
+static void _log_halfbits(const SubGhzProtocolDecoderHonda* inst) {
+    if(inst->hbit_count == 0u) return;
+
+    char buf[65];
+    uint16_t n = inst->hbit_count < 64u ? inst->hbit_count : 64u;
+    for(uint16_t i = 0u; i < n; i++)
+        buf[i] = inst->hbits[i] ? '1' : '0';
+    buf[n] = '\0';
+
+    FURI_LOG_D(TAG, "HalfBits[0..%u]: %s%s",
+               inst->hbit_count - 1u, buf,
+               inst->hbit_count > 64u ? "..." : "");
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * MANCHESTER DECODER
+ * ════════════════════════════════════════════════════════════════════════ */
+
+static inline void _push_bit_lsb(uint8_t* out_bytes,
+                                   uint16_t  bit_pos,
+                                   uint8_t   bit_val) {
+    uint16_t byte_idx = bit_pos / 8u;
+    uint8_t  bit_idx  = (uint8_t)(bit_pos % 8u);
+    if(bit_val)
+        out_bytes[byte_idx] |=  (uint8_t)(1u << bit_idx);
+    else
+        out_bytes[byte_idx] &= (uint8_t)(~(1u << bit_idx));
+}
+
+static uint16_t _manchester_decode(
+    const uint8_t* hbits,
+    uint16_t       hbit_count,
+    uint8_t*       out_bytes,
+    uint16_t       out_max_bits,
+    bool           invert
+) {
+    uint16_t out_bits = 0u;
+    uint16_t i        = 0u;
+
+    while(i + 1u < hbit_count && hbits[i] == hbits[i + 1u]) i++;
+
+    if(i >= hbit_count) return 0u;
+
+    while(i + 1u < hbit_count && out_bits < out_max_bits) {
+        uint8_t h0 = hbits[i];
+        uint8_t h1 = hbits[i + 1u];
+
         if(h0 != h1) {
-            uint8_t bit_val;
+            uint8_t bit;
             if(!invert)
-                bit_val = (h0 == 1 && h1 == 0) ? 1u : 0u;
+                bit = (h0 == 1u && h1 == 0u) ? 1u : 0u;
             else
-                bit_val = (h0 == 0 && h1 == 1) ? 1u : 0u;
-            uint8_t byte_idx = bit_count / 8u;
-            uint8_t bit_idx  = 7u - (bit_count % 8u);
-            if(bit_val)
-                decoded[byte_idx] |= (uint8_t)(1u << bit_idx);
-            else
-                decoded[byte_idx] &= (uint8_t)(~(1u << bit_idx));
-            bit_count++;
-            i += 2;
+                bit = (h0 == 0u && h1 == 1u) ? 1u : 0u;
+
+            _push_bit_lsb(out_bytes, out_bits, bit);
+            out_bits++;
+            i += 2u;
         } else {
             i++;
         }
     }
 
-    if(bit_count < HONDA_MIN_BITS) return false;
+    return out_bits;
+}
 
-    FURI_LOG_D(
-        TAG, "pol=%s bits=%u: %02X %02X %02X %02X %02X %02X %02X %02X",
-        invert ? "INV" : "NOR", bit_count,
-        decoded[0], decoded[1], decoded[2], decoded[3],
-        decoded[4], decoded[5], decoded[6], decoded[7]);
+/* ══════════════════════════════════════════════════════════════════════════
+ * FRAME VALIDATION
+ * ════════════════════════════════════════════════════════════════════════ */
+static bool _valid_button(uint8_t btn) {
+    switch(btn) {
+    case HONDA_BTN_LOCK:
+    case HONDA_BTN_UNLOCK:
+    case HONDA_BTN_TRUNK:
+    case HONDA_BTN_PANIC:
+    case HONDA_BTN_RSTART:
+    case HONDA_BTN_LOCK2PRESS:
+        return true;
+    default:
+        return false;
+    }
+}
 
-    /* --- Type-A: [4b btn][28b serial][24b counter][8b csum] = 64 bits --- */
-    if(bit_count >= 64u) {
-        uint8_t  btn     = (uint8_t)_bits_get(decoded, 0, 4);
-        uint32_t serial  = _bits_get(decoded, 4, 28);
-        uint32_t counter = _bits_get(decoded, 32, 24);
-        uint8_t  csum    = (uint8_t)_bits_get(decoded, 56, 8);
+static uint32_t _extract_bits_lsb(const uint8_t* buf,
+                                    uint16_t start, uint16_t len) {
+    uint32_t val = 0u;
+    for(uint16_t i = 0u; i < len; i++) {
+        uint16_t pos = start + i;
+        uint8_t  b   = (uint8_t)((buf[pos / 8u] >> (pos % 8u)) & 1u);
+        val |= (uint32_t)b << i;
+    }
+    return val;
+}
 
-        uint8_t xor_check = 0;
-        for(uint8_t b = 0; b < 7; b++) xor_check ^= decoded[b];
+static bool _try_parse_at_offset(
+    SubGhzProtocolDecoderHonda* inst,
+    const uint8_t* bits,
+    uint16_t       total_bits,
+    uint16_t       start
+) {
+    if(start + HONDA_FRAME_BITS_M1 <= total_bits) {
+        uint8_t  btn     = (uint8_t)_extract_bits_lsb(bits, start +  0u,  4u);
+        uint32_t serial  =          _extract_bits_lsb(bits, start +  4u, 28u);
+        uint32_t counter =          _extract_bits_lsb(bits, start + 32u, 24u);
+        uint8_t  mode_n  = (uint8_t)_extract_bits_lsb(bits, start + 56u,  4u);
+        uint8_t  csum    = (uint8_t)_extract_bits_lsb(bits, start + 60u,  8u);
 
-        if(xor_check == csum ||
-           (btn <= HONDA_BTN_LOCK2PRESS && btn > 0 &&
-            serial != 0 && serial != 0xFFFFFFFu &&
-            __builtin_popcount(xor_check ^ csum) <= 4)) {
+        uint8_t fb[7];
+        fb[0] = (uint8_t)((btn << 4) | ((serial >> 24) & 0x0Fu));
+        fb[1] = (uint8_t)((serial >> 16) & 0xFFu);
+        fb[2] = (uint8_t)((serial >>  8) & 0xFFu);
+        fb[3] = (uint8_t)( serial        & 0xFFu);
+        fb[4] = (uint8_t)((counter >> 16) & 0xFFu);
+        fb[5] = (uint8_t)((counter >>  8) & 0xFFu);
+        fb[6] = (uint8_t)( counter        & 0xFFu);
+        uint8_t calc = _honda_xor_checksum(fb, 7u);
+
+        FURI_LOG_D(TAG,
+            "Parse@%u M1-TA btn=%X ser=%07lX cnt=%06lX "
+            "mode=%X csum=%02X calc=%02X",
+            start, btn,
+            (unsigned long)serial, (unsigned long)counter,
+            mode_n, csum, calc);
+
+        if(calc == csum && _valid_button(btn) &&
+           serial != 0u && serial != 0x0FFFFFFFu) {
             inst->frame.type_b        = false;
-            inst->frame.type_b_header = 0;
+            inst->frame.type_b_header = 0u;
             inst->frame.button        = btn;
             inst->frame.serial        = serial;
             inst->frame.counter       = counter;
             inst->frame.checksum      = csum;
-            inst->frame.mode          = 0x2u;
-            inst->frame_valid         = true;
-            FURI_LOG_I(
-                TAG, "DECODED TypeA pol=%s btn=%u ser=%07lX cnt=%06lX",
-                invert ? "INV" : "NOR",
-                btn, (unsigned long)serial, (unsigned long)counter);
+            inst->frame.mode  = ((mode_n == 0x2u)||(mode_n == 0xCu))
+                                 ? mode_n : 0x2u;
+            inst->frame.hw_mode = 1u;
+            inst->frame_valid   = true;
+            FURI_LOG_I(TAG, "M1 TypeA OK @bit%u btn=%u ser=%07lX cnt=%06lX",
+                       start, btn,
+                       (unsigned long)serial, (unsigned long)counter);
             return true;
         }
     }
 
-    /* --- Type-B: [4b hdr][4b btn][28b serial][24b counter][8b csum] = 68 bits --- */
-    if(bit_count >= 68u) {
-        uint8_t  hdr     = (uint8_t)_bits_get(decoded, 0, 4);
-        uint8_t  btn     = (uint8_t)_bits_get(decoded, 4, 4);
-        uint32_t serial  = _bits_get(decoded, 8, 28);
-        uint32_t counter = _bits_get(decoded, 36, 24);
-        uint8_t  csum    = (uint8_t)_bits_get(decoded, 60, 8);
+    if(start + HONDA_FRAME_BITS_M1 <= total_bits) {
+        uint8_t  hdr     = (uint8_t)_extract_bits_lsb(bits, start +  0u,  4u);
+        uint8_t  btn     = (uint8_t)_extract_bits_lsb(bits, start +  4u,  4u);
+        uint32_t serial  =          _extract_bits_lsb(bits, start +  8u, 28u);
+        uint32_t counter =          _extract_bits_lsb(bits, start + 36u, 24u);
+        uint8_t  mode_n  = (uint8_t)_extract_bits_lsb(bits, start + 60u,  4u);
+        uint8_t  csum    = (uint8_t)_extract_bits_lsb(bits, start + 64u,  8u);
 
-        uint8_t calc_csum_b = 0;
-        {
-            uint8_t fb[7] = {0};
-            fb[0] = (uint8_t)((hdr << 4) | (btn & 0x0Fu));
-            fb[1] = (uint8_t)((serial >> 20) & 0xFFu);
-            fb[2] = (uint8_t)((serial >> 12) & 0xFFu);
-            fb[3] = (uint8_t)((serial >> 4)  & 0xFFu);
-            fb[4] = (uint8_t)(((serial & 0x0Fu) << 4) | ((counter >> 20) & 0x0Fu));
-            fb[5] = (uint8_t)((counter >> 12) & 0xFFu);
-            fb[6] = (uint8_t)((counter >> 4)  & 0xFFu);
-            for(uint8_t _i = 0; _i < 7; _i++) calc_csum_b ^= fb[_i];
-        }
+        uint8_t fb[7];
+        fb[0] = (uint8_t)((hdr << 4) | (btn & 0x0Fu));
+        fb[1] = (uint8_t)((serial >> 20) & 0xFFu);
+        fb[2] = (uint8_t)((serial >> 12) & 0xFFu);
+        fb[3] = (uint8_t)((serial >>  4) & 0xFFu);
+        fb[4] = (uint8_t)(((serial & 0x0Fu) << 4) |
+                           ((counter >> 20) & 0x0Fu));
+        fb[5] = (uint8_t)((counter >> 12) & 0xFFu);
+        fb[6] = (uint8_t)((counter >>  4) & 0xFFu);
+        uint8_t calc = _honda_xor_checksum(fb, 7u);
 
-        if(btn <= HONDA_BTN_LOCK2PRESS &&
-           (calc_csum_b == csum || __builtin_popcount(calc_csum_b ^ csum) <= 1)) {
+        FURI_LOG_D(TAG,
+            "Parse@%u M1-TB hdr=%X btn=%X ser=%07lX cnt=%06lX "
+            "csum=%02X calc=%02X",
+            start, hdr, btn,
+            (unsigned long)serial, (unsigned long)counter,
+            csum, calc);
+
+        if(calc == csum && _valid_button(btn) &&
+           serial != 0u && serial != 0x0FFFFFFFu) {
             inst->frame.type_b        = true;
             inst->frame.type_b_header = hdr;
             inst->frame.button        = btn;
             inst->frame.serial        = serial;
             inst->frame.counter       = counter;
             inst->frame.checksum      = csum;
-            inst->frame.mode          = (uint8_t)((decoded[7] >> 4) & 0x0Fu);
-            inst->frame_valid         = true;
-            FURI_LOG_I(
-                TAG, "DECODED TypeB pol=%s hdr=%u btn=%u ser=%07lX cnt=%06lX",
-                invert ? "INV" : "NOR",
-                hdr, btn, (unsigned long)serial, (unsigned long)counter);
+            inst->frame.mode  = ((mode_n == 0x2u)||(mode_n == 0xCu))
+                                 ? mode_n : 0x2u;
+            inst->frame.hw_mode = 1u;
+            inst->frame_valid   = true;
+            FURI_LOG_I(TAG,
+                "M1 TypeB OK @bit%u hdr=%X btn=%u ser=%07lX cnt=%06lX",
+                start, hdr, btn,
+                (unsigned long)serial, (unsigned long)counter);
+            return true;
+        }
+    }
+
+    if(start + HONDA_FRAME_BITS_M2 <= total_bits) {
+        uint8_t  btn     = (uint8_t)_extract_bits_lsb(bits, start +  0u,  4u);
+        uint32_t serial  =          _extract_bits_lsb(bits, start +  4u, 28u);
+        uint32_t counter =          _extract_bits_lsb(bits, start + 32u, 24u);
+        uint8_t  mode_n  = (uint8_t)_extract_bits_lsb(bits, start + 56u,  4u);
+        uint8_t  csum    = (uint8_t)_extract_bits_lsb(bits, start + 60u,  6u);
+
+        uint8_t fb[7];
+        fb[0] = (uint8_t)((btn << 4) | ((serial >> 24) & 0x0Fu));
+        fb[1] = (uint8_t)((serial >> 16) & 0xFFu);
+        fb[2] = (uint8_t)((serial >>  8) & 0xFFu);
+        fb[3] = (uint8_t)( serial        & 0xFFu);
+        fb[4] = (uint8_t)((counter >> 16) & 0xFFu);
+        fb[5] = (uint8_t)((counter >>  8) & 0xFFu);
+        fb[6] = (uint8_t)( counter        & 0xFFu);
+        uint8_t calc = _honda_xor_checksum(fb, 7u) & 0x3Fu;
+
+        if(calc == csum && _valid_button(btn) &&
+           serial != 0u && serial != 0x0FFFFFFFu) {
+            inst->frame.type_b        = false;
+            inst->frame.type_b_header = 0u;
+            inst->frame.button        = btn;
+            inst->frame.serial        = serial;
+            inst->frame.counter       = counter;
+            inst->frame.checksum      = csum;
+            inst->frame.mode  = ((mode_n == 0x2u)||(mode_n == 0xCu))
+                                 ? mode_n : 0x2u;
+            inst->frame.hw_mode = 2u;
+            inst->frame_valid   = true;
+            FURI_LOG_I(TAG, "M2 TypeA OK @bit%u btn=%u ser=%07lX cnt=%06lX",
+                       start, btn,
+                       (unsigned long)serial, (unsigned long)counter);
             return true;
         }
     }
@@ -467,75 +637,159 @@ static bool _honda_try_decode_polarity(SubGhzProtocolDecoderHonda* inst, bool in
     return false;
 }
 
-static bool _honda_try_decode(SubGhzProtocolDecoderHonda* inst) {
-    if(inst->hb_count < 40u) return false;
-    if(_honda_try_decode_polarity(inst, true))  return true;
-    if(_honda_try_decode_polarity(inst, false)) return true;
+/* ══════════════════════════════════════════════════════════════════════════
+ * SLIDING WINDOW FRAME SEARCH
+ * ════════════════════════════════════════════════════════════════════════ */
+static bool _search_frames(SubGhzProtocolDecoderHonda* inst,
+                            const uint8_t* decoded_bits,
+                            uint16_t       total_decoded_bits) {
+    if(total_decoded_bits < HONDA_MIN_BITS) {
+        FURI_LOG_D(TAG, "Search: only %u bits, need %u → skip",
+                   total_decoded_bits, (uint16_t)HONDA_MIN_BITS);
+        return false;
+    }
+
+    {
+        char buf[129];
+        uint16_t n = total_decoded_bits < 128u ? total_decoded_bits : 128u;
+        for(uint16_t i = 0u; i < n; i++) {
+            uint8_t b = (uint8_t)((decoded_bits[i / 8u] >> (i % 8u)) & 1u);
+            buf[i] = b ? '1' : '0';
+        }
+        buf[n] = '\0';
+        FURI_LOG_D(TAG, "DecodedBits[0..%u]: %s%s",
+                   total_decoded_bits - 1u, buf,
+                   total_decoded_bits > 128u ? "..." : "");
+    }
+
+    uint16_t max_start = total_decoded_bits > HONDA_MIN_BITS
+        ? total_decoded_bits - HONDA_MIN_BITS : 0u;
+
+    for(uint16_t start = 0u; start <= max_start; start++) {
+        if(_try_parse_at_offset(inst, decoded_bits, total_decoded_bits, start))
+            return true;
+    }
+
+    FURI_LOG_D(TAG, "Search: no valid frame found in %u bits",
+               total_decoded_bits);
     return false;
 }
 
-/* ============================================================================
- * Encoder — build Manchester upload buffer
- * Uses Pandora timing: preamble 312 cycles × 250us, data bits 480/250us
- * ==========================================================================*/
-static void _honda_build_upload(SubGhzProtocolEncoderHonda* inst) {
-    LevelDuration* buf = inst->encoder.upload;
-    size_t idx = 0;
+/* ══════════════════════════════════════════════════════════════════════════
+ * PROCESS BURST
+ * ════════════════════════════════════════════════════════════════════════ */
 
-    buf[idx++] = level_duration_make(false, HONDA_GUARD_TIME_US);
-
-    for(uint16_t p = 0; p < (uint16_t)(HONDA_MIN_PREAMBLE_COUNT * 2u); p++) {
-        buf[idx++] = level_duration_make((p & 1u) != 0u, HONDA_TE_SHORT);
+static void _process_burst(SubGhzProtocolDecoderHonda* inst) {
+    if(inst->dbg_dur_count > 0u) {
+        uint32_t avg = (uint32_t)(inst->dbg_sum_dur / inst->dbg_dur_count);
+        FURI_LOG_D(TAG,
+            "Burst: %u edges, %lu valid durs, min=%lu avg=%lu max=%lu us",
+            inst->edge_count,
+            (unsigned long)inst->dbg_dur_count,
+            (unsigned long)inst->dbg_min_dur,
+            (unsigned long)avg,
+            (unsigned long)inst->dbg_max_dur);
     }
 
-    uint8_t frame[9] = {0};
-    uint8_t btn = inst->active_button & 0x0Fu;
-
-    if(!inst->frame.type_b) {
-        _bits_set(frame, 0,  4,  btn);
-        _bits_set(frame, 4,  28, inst->frame.serial);
-        _bits_set(frame, 32, 24, inst->frame.counter);
-        _bits_set(frame, 56, 8,  _honda_xor_checksum(frame));
-    } else {
-        _bits_set(frame, 0,  4,  inst->frame.type_b_header);
-        _bits_set(frame, 4,  4,  btn);
-        _bits_set(frame, 8,  28, inst->frame.serial);
-        _bits_set(frame, 36, 24, inst->frame.counter);
-
-        uint8_t cs = 0;
-        for(uint8_t i = 0; i < 7; i++) cs ^= frame[i];
-        _bits_set(frame, 60, 8, cs);
+    if(inst->edge_count < HONDA_FSK_MIN_PREAMBLE_BITS) {
+        FURI_LOG_D(TAG, "Burst: too few edges (%u) -> discard",
+                   inst->edge_count);
+        return;
     }
 
-    uint8_t total_bits = inst->frame.type_b ?
-        (uint8_t)HONDA_FRAME_BITS_B : (uint8_t)HONDA_FRAME_BITS;
+    if(!_update_T_estimate(inst)) {
+        FURI_LOG_D(TAG, "Burst: T estimation failed -> discard");
+        return;
+    }
 
-    /* Manchester encode inverted: bit-1 = LOW/HIGH, bit-0 = HIGH/LOW, all at TE_SHORT */
-    for(uint8_t b = 0; b < total_bits; b++) {
-        uint8_t byte_idx = b / 8u;
-        uint8_t bit_idx  = 7u - (b % 8u);
-        uint8_t bit      = (frame[byte_idx] >> bit_idx) & 1u;
-        if(bit) {
-            /* bit 1: LOW then HIGH */
-            buf[idx++] = level_duration_make(false, HONDA_TE_SHORT);
-            buf[idx++] = level_duration_make(true,  HONDA_TE_SHORT);
-        } else {
-            /* bit 0: HIGH then LOW */
-            buf[idx++] = level_duration_make(true,  HONDA_TE_SHORT);
-            buf[idx++] = level_duration_make(false, HONDA_TE_SHORT);
+    if(!_quantize_to_halfbits(inst)) {
+        FURI_LOG_D(TAG, "Burst: quantization failed -> discard");
+        return;
+    }
+
+    _log_halfbits(inst);
+
+    uint8_t decoded_bits[HONDA_MAN_BIT_BUF / 8u + 1u];
+
+    for(uint8_t invert = 0u; invert <= 1u; invert++) {
+        memset(decoded_bits, 0, sizeof(decoded_bits));
+
+        uint16_t n_decoded = _manchester_decode(
+            inst->hbits,
+            inst->hbit_count,
+            decoded_bits,
+            (uint16_t)(sizeof(decoded_bits) * 8u),
+            (bool)invert);
+
+        FURI_LOG_D(TAG, "Manchester conv=%s -> %u bits",
+                   invert ? "B(L>H=1)" : "A(H>L=1)", n_decoded);
+
+        if(n_decoded < HONDA_MIN_BITS) {
+            FURI_LOG_D(TAG,
+                "Manchester: too few bits (%u) with conv=%s",
+                n_decoded, invert ? "B" : "A");
+            continue;
         }
-        furi_check(idx < HONDA_ENC_BUF_SIZE);
+
+        if(_search_frames(inst, decoded_bits, n_decoded)) {
+            inst->generic.data = _honda_pack(&inst->frame);
+            inst->generic.data_count_bit =
+                (inst->frame.hw_mode == 1u)
+                    ? (uint8_t)HONDA_FRAME_BITS_M1
+                    : (uint8_t)HONDA_FRAME_BITS_M2;
+            inst->generic.serial = inst->frame.serial;
+            inst->generic.btn    = inst->frame.button;
+            inst->generic.cnt    = inst->frame.counter;
+
+            uint8_t custom =
+                subghz_protocol_honda_btn_to_custom(inst->frame.button);
+            if(subghz_custom_btn_get_original() == 0u)
+                subghz_custom_btn_set_original(custom);
+            subghz_custom_btn_set_max(HONDA_CUSTOM_BTN_MAX);
+
+            if(inst->base.callback)
+                inst->base.callback(&inst->base, inst->base.context);
+
+            return;
+        }
     }
 
-    buf[idx++] = level_duration_make(false, HONDA_GUARD_TIME_US);
-
-    inst->encoder.size_upload = idx;
-    inst->encoder.front       = 0;
+    FURI_LOG_D(TAG,
+        "Burst: no valid frame in either Manchester convention");
 }
 
-/* ============================================================================
- * Protocol tables
- * ==========================================================================*/
+/* ══════════════════════════════════════════════════════════════════════════
+ * DECODER FEED
+ * ════════════════════════════════════════════════════════════════════════ */
+void subghz_protocol_decoder_honda_feed(void* context, bool level, uint32_t duration) {
+    furi_assert(context);
+    SubGhzProtocolDecoderHonda* inst = context;
+
+    bool is_gap = false;
+    if(duration >= HONDA_FSK_GAP_US) {
+        is_gap = true;
+    } else if(inst->T_est > 0u && duration >= inst->T_est * 5u) {
+        is_gap = true;
+    }
+
+    if(is_gap) {
+        FURI_LOG_D(TAG, "Gap: dur=%lu µs, processing burst (%u edges)",
+                   (unsigned long)duration, inst->edge_count);
+        _process_burst(inst);
+        _decoder_reset_burst(inst);
+        return;
+    }
+
+    if(duration < HONDA_FSK_DUR_MIN_US) {
+        return;
+    }
+
+    _collect_edge(inst, level, duration);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Protocol descriptor tables
+ * ════════════════════════════════════════════════════════════════════════ */
 const SubGhzProtocolDecoder subghz_protocol_honda_decoder = {
     .alloc         = subghz_protocol_decoder_honda_alloc,
     .free          = subghz_protocol_decoder_honda_free,
@@ -559,54 +813,26 @@ const SubGhzProtocol subghz_protocol_honda = {
     .name    = SUBGHZ_PROTOCOL_HONDA_NAME,
     .type    = SubGhzProtocolTypeDynamic,
     .flag    = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_315 |
-               SubGhzProtocolFlag_AM  | SubGhzProtocolFlag_Decodable |
-               SubGhzProtocolFlag_Load | SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
+               SubGhzProtocolFlag_FM  | SubGhzProtocolFlag_Decodable |
+               SubGhzProtocolFlag_Load | SubGhzProtocolFlag_Save |
+               SubGhzProtocolFlag_Send,
     .decoder = &subghz_protocol_honda_decoder,
     .encoder = &subghz_protocol_honda_encoder,
 };
 
-/* ============================================================================
- * Custom button helpers
- *   1 → Lock      (0x01)
- *   2 → Unlock    (0x02)
- *   3 → Trunk     (0x04)
- *   4 → Panic     (0x08)
- *   5 → RStart    (0x05)
- * ==========================================================================*/
-uint8_t subghz_protocol_honda_btn_to_custom(uint8_t btn) {
-    switch(btn) {
-    case HONDA_BTN_LOCK:       return 1;
-    case HONDA_BTN_UNLOCK:     return 2;
-    case HONDA_BTN_TRUNK:      return 3;
-    case HONDA_BTN_PANIC:      return 4;
-    case HONDA_BTN_RSTART:     return 5;
-    default:                   return 1;
-    }
-}
-
-uint8_t subghz_protocol_honda_custom_to_btn(uint8_t custom) {
-    switch(custom) {
-    case 1: return HONDA_BTN_LOCK;
-    case 2: return HONDA_BTN_UNLOCK;
-    case 3: return HONDA_BTN_TRUNK;
-    case 4: return HONDA_BTN_PANIC;
-    case 5: return HONDA_BTN_RSTART;
-    default: return HONDA_BTN_LOCK;
-    }
-}
-
-/* ============================================================================
- * Decoder
- * ==========================================================================*/
+/* ══════════════════════════════════════════════════════════════════════════
+ * Decoder lifecycle
+ * ════════════════════════════════════════════════════════════════════════ */
 void* subghz_protocol_decoder_honda_alloc(SubGhzEnvironment* environment) {
     UNUSED(environment);
     SubGhzProtocolDecoderHonda* inst = malloc(sizeof(SubGhzProtocolDecoderHonda));
     furi_check(inst);
     memset(inst, 0, sizeof(SubGhzProtocolDecoderHonda));
-    inst->base.protocol     = &subghz_protocol_honda;
+    inst->base.protocol         = &subghz_protocol_honda;
     inst->generic.protocol_name = inst->base.protocol->name;
-    inst->frame_valid       = false;
-    FURI_LOG_I(TAG, "decoder allocated");
+    inst->frame_valid           = false;
+    _decoder_full_reset(inst);
+    FURI_LOG_I(TAG, "decoder allocated (FSK adaptive mode)");
     return inst;
 }
 
@@ -617,68 +843,16 @@ void subghz_protocol_decoder_honda_free(void* context) {
 
 void subghz_protocol_decoder_honda_reset(void* context) {
     furi_assert(context);
-    SubGhzProtocolDecoderHonda* inst = context;
-    inst->decoder.parser_step   = HondaDecoderStepReset;
-    inst->decoder.te_last       = 0;
-    inst->hb_count              = 0;
-    inst->consecutive_clean     = 0;
-    /* DO NOT clear frame/frame_valid — get_string needs them after reset */
-}
-
-void subghz_protocol_decoder_honda_feed(void* context, bool level, uint32_t duration) {
-    furi_assert(context);
-    SubGhzProtocolDecoderHonda* inst = context;
-    uint8_t lvl       = level ? 1u : 0u;
-    uint8_t dur_class = _classify_duration(duration);
-
-    if(dur_class > 0) {
-        inst->consecutive_clean++;
-        if(dur_class == 1) {
-            if(inst->hb_count < HONDA_HALF_BIT_BUF)
-                inst->half_bits[inst->hb_count++] = lvl;
-        } else {
-            if(inst->hb_count + 2u <= HONDA_HALF_BIT_BUF) {
-                inst->half_bits[inst->hb_count++] = lvl;
-                inst->half_bits[inst->hb_count++] = lvl;
-            }
-        }
-    } else {
-        if(inst->hb_count >= (HONDA_MIN_PREAMBLE_COUNT + 16u)) {
-            if(_honda_try_decode(inst)) {
-                inst->generic.data = _honda_pack(&inst->frame);
-                inst->generic.data_count_bit = inst->frame.type_b ?
-                    (uint8_t)HONDA_FRAME_BITS_B : (uint8_t)HONDA_FRAME_BITS;
-                inst->generic.serial = inst->frame.serial;
-                inst->generic.btn    = inst->frame.button;
-                inst->generic.cnt    = inst->frame.counter;
-                FURI_LOG_I(
-                    TAG, "FRAME btn=%u ser=%07lX cnt=%06lX",
-                    inst->frame.button,
-                    (unsigned long)inst->frame.serial,
-                    (unsigned long)inst->frame.counter);
-
-                uint8_t custom = subghz_protocol_honda_btn_to_custom(inst->frame.button);
-                if(subghz_custom_btn_get_original() == 0)
-                    subghz_custom_btn_set_original(custom);
-                subghz_custom_btn_set_max(HONDA_CUSTOM_BTN_MAX);
-
-                if(inst->base.callback)
-                    inst->base.callback(&inst->base, inst->base.context);
-            }
-        }
-        inst->hb_count          = 0;
-        inst->consecutive_clean = 0;
-    }
-    inst->decoder.te_last = duration;
+    _decoder_full_reset(context);
 }
 
 uint8_t subghz_protocol_decoder_honda_get_hash_data(void* context) {
     furi_assert(context);
     SubGhzProtocolDecoderHonda* inst = context;
-    return (uint8_t)(inst->generic.data        ^
-                    (inst->generic.data >> 8)   ^
-                    (inst->generic.data >> 16)  ^
-                    (inst->generic.data >> 24)  ^
+    return (uint8_t)(inst->generic.data       ^
+                    (inst->generic.data >>  8) ^
+                    (inst->generic.data >> 16) ^
+                    (inst->generic.data >> 24) ^
                     (inst->generic.data >> 32));
 }
 
@@ -698,21 +872,15 @@ SubGhzProtocolStatus subghz_protocol_decoder_honda_deserialize(
         subghz_protocol_honda_const.min_count_bit_for_found);
     if(ret == SubGhzProtocolStatusOk) {
         _honda_unpack(inst->generic.data, &inst->frame);
-        inst->frame_valid      = true;
-        inst->generic.serial   = inst->frame.serial;
-        inst->generic.btn      = inst->frame.button;
-        inst->generic.cnt      = inst->frame.counter;
-
-        uint8_t custom = subghz_protocol_honda_btn_to_custom(inst->frame.button);
-        if(subghz_custom_btn_get_original() == 0)
+        inst->frame_valid    = true;
+        inst->generic.serial = inst->frame.serial;
+        inst->generic.btn    = inst->frame.button;
+        inst->generic.cnt    = inst->frame.counter;
+        uint8_t custom =
+            subghz_protocol_honda_btn_to_custom(inst->frame.button);
+        if(subghz_custom_btn_get_original() == 0u)
             subghz_custom_btn_set_original(custom);
         subghz_custom_btn_set_max(HONDA_CUSTOM_BTN_MAX);
-
-        FURI_LOG_I(
-            TAG, "deserialize: btn=%u ser=%07lX cnt=%06lX",
-            inst->frame.button,
-            (unsigned long)inst->frame.serial,
-            (unsigned long)inst->frame.counter);
     }
     return ret;
 }
@@ -720,12 +888,10 @@ SubGhzProtocolStatus subghz_protocol_decoder_honda_deserialize(
 void subghz_protocol_decoder_honda_get_string(void* context, FuriString* output) {
     furi_assert(context);
     SubGhzProtocolDecoderHonda* inst = context;
-
-    if(!inst->frame_valid && inst->generic.data != 0) {
+    if(!inst->frame_valid && inst->generic.data != 0u) {
         _honda_unpack(inst->generic.data, &inst->frame);
         inst->frame_valid = true;
     }
-
     const char* btn_name;
     switch(inst->frame.button) {
     case HONDA_BTN_LOCK:       btn_name = "Lock";         break;
@@ -736,27 +902,96 @@ void subghz_protocol_decoder_honda_get_string(void* context, FuriString* output)
     case HONDA_BTN_LOCK2PRESS: btn_name = "Lock x2";      break;
     default:                   btn_name = "Unknown";      break;
     }
-
     furi_string_cat_printf(
         output,
-        "%s %s %ubit\r\n"
+        "%s M%u %s %ubit\r\n"
         "Btn:%s (0x%X)\r\n"
         "Ser:%07lX\r\n"
-        "Cnt:%06lX Chk:%02X Mode:%X\r\n",
+        "Cnt:%06lX Chk:%02X Mode:%X\r\n"
+        "T=%luµs baud~%lu\r\n",
         inst->generic.protocol_name,
+        inst->frame.hw_mode,
         inst->frame.type_b ? "TB" : "TA",
         inst->generic.data_count_bit,
-        btn_name,
-        inst->frame.button,
+        btn_name, inst->frame.button,
         (unsigned long)inst->frame.serial,
         (unsigned long)inst->frame.counter,
-        inst->frame.checksum,
-        inst->frame.mode);
+        inst->frame.checksum, inst->frame.mode,
+        (unsigned long)inst->T_est,
+        inst->T_est > 0u
+            ? (unsigned long)(1000000u / (inst->T_est * 2u)) : 0ul);
 }
 
-/* ============================================================================
- * Encoder
- * ==========================================================================*/
+/* ══════════════════════════════════════════════════════════════════════════
+ * ENCODER
+ * ════════════════════════════════════════════════════════════════════════ */
+static void _honda_build_frame_bits(const HondaFrameData* f, uint8_t out[11]) {
+    memset(out, 0, 11u);
+#define HONDA_SET_BIT(buf, n, val) \
+    do { \
+        uint16_t _n = (uint16_t)(n); \
+        if(val) (buf)[_n/8u] |=  (uint8_t)(1u<<(_n%8u)); \
+        else    (buf)[_n/8u] &= (uint8_t)(~(1u<<(_n%8u))); \
+    } while(0)
+
+    if(!f->type_b) {
+        for(int i=0;i<4; i++) HONDA_SET_BIT(out,    i, (f->button >>i)&1u);
+        for(int i=0;i<28;i++) HONDA_SET_BIT(out,  4+i, (f->serial >>i)&1u);
+        for(int i=0;i<24;i++) HONDA_SET_BIT(out, 32+i, (f->counter>>i)&1u);
+        for(int i=0;i<4; i++) HONDA_SET_BIT(out, 56+i, (f->mode   >>i)&1u);
+        uint8_t fb[7];
+        fb[0]=(uint8_t)((f->button<<4)|((f->serial>>24)&0x0Fu));
+        fb[1]=(uint8_t)((f->serial>>16)&0xFFu);
+        fb[2]=(uint8_t)((f->serial>> 8)&0xFFu);
+        fb[3]=(uint8_t)( f->serial     &0xFFu);
+        fb[4]=(uint8_t)((f->counter>>16)&0xFFu);
+        fb[5]=(uint8_t)((f->counter>> 8)&0xFFu);
+        fb[6]=(uint8_t)( f->counter    &0xFFu);
+        uint8_t csum=_honda_xor_checksum(fb,7u);
+        for(int i=0;i<8;i++) HONDA_SET_BIT(out,60+i,(csum>>i)&1u);
+    } else {
+        for(int i=0;i<4; i++) HONDA_SET_BIT(out,    i,(f->type_b_header>>i)&1u);
+        for(int i=0;i<4; i++) HONDA_SET_BIT(out,  4+i,(f->button       >>i)&1u);
+        for(int i=0;i<28;i++) HONDA_SET_BIT(out,  8+i,(f->serial       >>i)&1u);
+        for(int i=0;i<24;i++) HONDA_SET_BIT(out, 36+i,(f->counter      >>i)&1u);
+        for(int i=0;i<4; i++) HONDA_SET_BIT(out, 60+i,(f->mode         >>i)&1u);
+        uint8_t fb[7];
+        fb[0]=(uint8_t)((f->type_b_header<<4)|(f->button&0x0Fu));
+        fb[1]=(uint8_t)((f->serial>>20)&0xFFu);
+        fb[2]=(uint8_t)((f->serial>>12)&0xFFu);
+        fb[3]=(uint8_t)((f->serial>> 4)&0xFFu);
+        fb[4]=(uint8_t)(((f->serial&0x0Fu)<<4)|((f->counter>>20)&0x0Fu));
+        fb[5]=(uint8_t)((f->counter>>12)&0xFFu);
+        fb[6]=(uint8_t)((f->counter>> 4)&0xFFu);
+        uint8_t csum=_honda_xor_checksum(fb,7u);
+        for(int i=0;i<8;i++) HONDA_SET_BIT(out,64+i,(csum>>i)&1u);
+    }
+#undef HONDA_SET_BIT
+}
+
+static void _honda_build_upload(SubGhzProtocolEncoderHonda* inst) {
+    LevelDuration* buf = inst->encoder.upload;
+    size_t idx = 0u;
+    buf[idx++] = level_duration_make(false, (uint32_t)HONDA_GUARD_TIME_US);
+    for(uint16_t p = 0u; p < (uint16_t)(HONDA_PREAMBLE_CYCLES_M1 * 2u); p++) {
+        buf[idx++] = level_duration_make((p&1u)==0u, (uint32_t)HONDA_TE_SHORT);
+        furi_check(idx < HONDA_ENC_BUF_SIZE - 4u);
+    }
+    buf[idx++] = level_duration_make(false, 740u);
+    uint8_t frame_bits[11] = {0};
+    _honda_build_frame_bits(&inst->frame, frame_bits);
+    for(uint8_t b = 0u; b < (uint8_t)HONDA_FRAME_BITS_M1; b++) {
+        uint8_t  bit = (uint8_t)((frame_bits[b/8u] >> (b%8u)) & 1u);
+        uint32_t te  = bit ? (uint32_t)HONDA_TE_LONG : (uint32_t)HONDA_TE_SHORT;
+        buf[idx++] = level_duration_make(true,  te);
+        buf[idx++] = level_duration_make(false, te);
+        furi_check(idx < HONDA_ENC_BUF_SIZE - 2u);
+    }
+    buf[idx++] = level_duration_make(false, (uint32_t)HONDA_GUARD_TIME_US);
+    inst->encoder.size_upload = idx;
+    inst->encoder.front       = 0u;
+}
+
 void* subghz_protocol_encoder_honda_alloc(SubGhzEnvironment* environment) {
     UNUSED(environment);
     SubGhzProtocolEncoderHonda* inst = malloc(sizeof(SubGhzProtocolEncoderHonda));
@@ -764,12 +999,10 @@ void* subghz_protocol_encoder_honda_alloc(SubGhzEnvironment* environment) {
     memset(inst, 0, sizeof(SubGhzProtocolEncoderHonda));
     inst->base.protocol         = &subghz_protocol_honda;
     inst->generic.protocol_name = inst->base.protocol->name;
-    inst->encoder.repeat        = 3;
-    inst->encoder.size_upload   = 0;
-    inst->encoder.upload        = malloc(HONDA_ENC_BUF_SIZE * sizeof(LevelDuration));
+    inst->encoder.repeat        = 3u;
+    inst->encoder.upload = malloc(HONDA_ENC_BUF_SIZE * sizeof(LevelDuration));
     furi_check(inst->encoder.upload);
     inst->encoder.is_running = false;
-    inst->encoder.front      = 0;
     return inst;
 }
 
@@ -782,21 +1015,18 @@ void subghz_protocol_encoder_honda_free(void* context) {
 
 void subghz_protocol_encoder_honda_stop(void* context) {
     furi_assert(context);
-    SubGhzProtocolEncoderHonda* inst = context;
-    inst->encoder.is_running = false;
+    ((SubGhzProtocolEncoderHonda*)context)->encoder.is_running = false;
 }
 
 LevelDuration subghz_protocol_encoder_honda_yield(void* context) {
     furi_assert(context);
     SubGhzProtocolEncoderHonda* inst = context;
-    if(inst->encoder.repeat == 0 || !inst->encoder.is_running) {
-        inst->encoder.is_running = false;
+    if(inst->encoder.repeat == 0u || !inst->encoder.is_running)
         return level_duration_reset();
-    }
     LevelDuration ret = inst->encoder.upload[inst->encoder.front];
     if(++inst->encoder.front >= inst->encoder.size_upload) {
         inst->encoder.repeat--;
-        inst->encoder.front = 0;
+        inst->encoder.front = 0u;
     }
     return ret;
 }
@@ -805,37 +1035,33 @@ SubGhzProtocolStatus subghz_protocol_encoder_honda_deserialize(
     void* context, FlipperFormat* flipper_format) {
     furi_assert(context);
     SubGhzProtocolEncoderHonda* inst = context;
-    SubGhzProtocolStatus ret = subghz_block_generic_deserialize(&inst->generic, flipper_format);
+    SubGhzProtocolStatus ret =
+        subghz_block_generic_deserialize(&inst->generic, flipper_format);
     if(ret != SubGhzProtocolStatusOk) return ret;
-
     _honda_unpack(inst->generic.data, &inst->frame);
-
     uint8_t custom = subghz_protocol_honda_btn_to_custom(inst->frame.button);
-    if(subghz_custom_btn_get_original() == 0)
+    if(subghz_custom_btn_get_original() == 0u)
         subghz_custom_btn_set_original(custom);
     subghz_custom_btn_set_max(HONDA_CUSTOM_BTN_MAX);
-
     uint8_t active_custom = subghz_custom_btn_get();
-    inst->active_button = (active_custom == SUBGHZ_CUSTOM_BTN_OK)
-        ? subghz_protocol_honda_custom_to_btn(subghz_custom_btn_get_original())
-        : subghz_protocol_honda_custom_to_btn(active_custom);
-
-    inst->frame.counter = (inst->frame.counter +
-        furi_hal_subghz_get_rolling_counter_mult()) & 0x00FFFFFFu;
+    inst->active_button =
+        (active_custom == SUBGHZ_CUSTOM_BTN_OK)
+            ? subghz_protocol_honda_custom_to_btn(
+                  subghz_custom_btn_get_original())
+            : subghz_protocol_honda_custom_to_btn(active_custom);
+    inst->frame.counter =
+        (inst->frame.counter +
+         furi_hal_subghz_get_rolling_counter_mult()) & 0x00FFFFFFu;
     _honda_counter_increment(&inst->frame);
-
     inst->frame.button = inst->active_button;
-
     inst->generic.data = _honda_pack(&inst->frame);
     inst->generic.cnt  = inst->frame.counter;
     inst->generic.btn  = inst->active_button;
-
     flipper_format_rewind(flipper_format);
     uint8_t key_data[8];
     for(int i = 0; i < 8; i++)
-        key_data[i] = (uint8_t)(inst->generic.data >> (56 - i * 8));
-    flipper_format_update_hex(flipper_format, "Key", key_data, 8);
-
+        key_data[i] = (uint8_t)(inst->generic.data >> (56 - i*8));
+    flipper_format_update_hex(flipper_format, "Key", key_data, 8u);
     _honda_build_upload(inst);
     inst->encoder.is_running = true;
     return SubGhzProtocolStatusOk;
@@ -847,9 +1073,10 @@ void subghz_protocol_encoder_honda_set_button(void* context, uint8_t btn) {
     inst->active_button      = btn & 0x0Fu;
     inst->encoder.is_running = false;
     _honda_counter_increment(&inst->frame);
+    inst->frame.button    = inst->active_button;
     inst->generic.data    = _honda_pack(&inst->frame);
     inst->generic.cnt     = inst->frame.counter;
     _honda_build_upload(inst);
-    inst->encoder.repeat     = 3;
+    inst->encoder.repeat     = 3u;
     inst->encoder.is_running = true;
 }
