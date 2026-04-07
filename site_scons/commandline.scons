@@ -261,8 +261,15 @@ vars.AddVariables(
     ),
     (
         "DESKTOP_STATUSBAR_BAR_BACKGROUND",
-        "Should we use the Desktop Bar Background in Build? "
+        "Should we use the Desktop Status Bar Bar Background in Build? "
         " This will also create a C define DESKTOP_STATUSBAR_BAR_BACKGROUND so that "
+        " app can check the define too.",
+        "ON or OFF",
+    ),
+    (
+        "DESKTOP_STATUSBAR_BAR_BORDERS",
+        "Should we use the Desktop Bar Background in Build? "
+        " This will also create a C define DESKTOP_STATUSBAR_BAR_BORDERS so that "
         " app can check the define too.",
         "ON or OFF",
     ),

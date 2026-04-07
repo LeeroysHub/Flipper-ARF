@@ -133,6 +133,14 @@ if env["DESKTOP_STATUSBAR_BAR_BACKGROUND"] == "ON":
         ],
     )
 
+# DESKTOP_STATUSBAR_BAR_BORDERS = ON or OFF
+if env["DESKTOP_STATUSBAR_BAR_BORDERS"] == "ON":
+    env.Append(
+        CPPDEFINES=[
+            "DESKTOP_STATUSBAR_BAR_BORDERS",
+        ],
+    )
+
 # DESKTOP_OK_TO_SELECT_ANIMATON = ON or OFF
 if env["DESKTOP_OK_TO_SELECT_ANIMATON"] == "ON":
     env.Append(
