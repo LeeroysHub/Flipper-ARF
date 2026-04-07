@@ -9,6 +9,7 @@ import posixpath
 # *                                                                        *
 # **************************************************************************
 DESKTOP_STATUSBAR_BAR_BACKGROUND = "OFF"
+DESKTOP_OK_TO_SELECT_ANIMATON = "ON"
 
 # For more details on these options, run 'fbt -h'
 

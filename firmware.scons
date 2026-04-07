@@ -117,10 +117,27 @@ env.Append(
     ]
 )
 
+# **************************************************************************
+# *                                                                        *
+# *                                                                        *
+# *                 Leeroy's Custom Firmware Options                       *
+# *                                                                        *
+# *                                                                        *
+# **************************************************************************
+
+# DESKTOP_STATUSBAR_BAR_BACKGROUND = ON or OFF
 if env["DESKTOP_STATUSBAR_BAR_BACKGROUND"] == "ON":
     env.Append(
         CPPDEFINES=[
             "DESKTOP_STATUSBAR_BAR_BACKGROUND",
+        ],
+    )
+
+# DESKTOP_OK_TO_SELECT_ANIMATON = ON or OFF
+if env["DESKTOP_OK_TO_SELECT_ANIMATON"] == "ON":
+    env.Append(
+        CPPDEFINES=[
+            "DESKTOP_OK_TO_SELECT_ANIMATON",
         ],
     )
 
