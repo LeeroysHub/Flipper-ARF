@@ -83,14 +83,18 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
     /* for support black theme - paint white area and
      * draw icon with transparent white color
      */
+#ifdef DESKTOP_STATUSBAR_BAR_BACKGROUND //Leeroy Firmware Option in fbt_options.py
     canvas_set_color(gui->canvas, ColorWhite);
     canvas_draw_box(gui->canvas, 1, 1, 9, 7);
     canvas_draw_box(gui->canvas, 7, 3, 58, 6);
     canvas_draw_box(gui->canvas, 61, 1, 32, 7);
     canvas_draw_box(gui->canvas, 89, 3, 38, 6);
+#endif
     canvas_set_color(gui->canvas, ColorBlack);
+#ifdef DESKTOP_STATUSBAR_BAR_BACKGROUND
     canvas_set_bitmap_mode(gui->canvas, 1);
     canvas_draw_icon(gui->canvas, 0, 0, &I_Background_128x11);
+#endif
     canvas_set_bitmap_mode(gui->canvas, 0);
 
     // Right side
