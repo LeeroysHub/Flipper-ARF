@@ -115,9 +115,11 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
                 GUI_STATUS_BAR_Y + 1,
                 width + 2,
                 GUI_STATUS_BAR_WORKAREA_HEIGHT + 2);
+#ifdef DESKTOP_STATUSBAR_BAR_BORDERS
             canvas_set_color(gui->canvas, ColorWhite);
             canvas_draw_box(
                 gui->canvas, 0, 0, canvas_width(gui->canvas), canvas_height(gui->canvas));
+#endif
             canvas_set_color(gui->canvas, ColorBlack);
             // ViewPort draw
             canvas_frame_set(
@@ -134,6 +136,7 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
             GUI_STATUS_BAR_Y,
             right_used + 3,
             GUI_STATUS_BAR_HEIGHT);
+#ifdef DESKTOP_STATUSBAR_BAR_BORDERS
         canvas_set_color(gui->canvas, ColorBlack);
         canvas_draw_rframe(
             gui->canvas, 0, 0, canvas_width(gui->canvas), canvas_height(gui->canvas), 1);
@@ -149,6 +152,7 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
             canvas_height(gui->canvas) - 2,
             canvas_width(gui->canvas) - 2,
             canvas_height(gui->canvas) - 2);
+#endif
     }
 
     // Left side
@@ -166,9 +170,11 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
                 GUI_STATUS_BAR_Y + 1,
                 width + 2,
                 GUI_STATUS_BAR_WORKAREA_HEIGHT + 2);
+#ifdef DESKTOP_STATUSBAR_BAR_BORDERS
             canvas_set_color(gui->canvas, ColorWhite);
             canvas_draw_box(
                 gui->canvas, 0, 0, canvas_width(gui->canvas), canvas_height(gui->canvas));
+#endif
             canvas_set_color(gui->canvas, ColorBlack);
             // ViewPort draw
             canvas_frame_set(
@@ -190,8 +196,10 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
             GUI_STATUS_BAR_Y + 1,
             width + 2,
             GUI_STATUS_BAR_WORKAREA_HEIGHT + 2);
+#ifdef DESKTOP_STATUSBAR_BAR_BORDERS
         canvas_set_color(gui->canvas, ColorWhite);
         canvas_draw_box(gui->canvas, 0, 0, canvas_width(gui->canvas), canvas_height(gui->canvas));
+#endif
         canvas_set_color(gui->canvas, ColorBlack);
         // Draw Icon
         canvas_frame_set(
@@ -204,6 +212,7 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
     // Draw frame around icons on the left
     if(left_used) {
         canvas_frame_set(gui->canvas, 0, 0, left_used + 3, GUI_STATUS_BAR_HEIGHT);
+#ifdef DESKTOP_STATUSBAR_BAR_BORDERS
         canvas_draw_rframe(
             gui->canvas, 0, 0, canvas_width(gui->canvas), canvas_height(gui->canvas), 1);
         canvas_draw_line(
@@ -218,6 +227,7 @@ static void gui_redraw_status_bar(Gui* gui, bool need_attention) {
             canvas_height(gui->canvas) - 2,
             canvas_width(gui->canvas) - 2,
             canvas_height(gui->canvas) - 2);
+#endif
     }
 }
 
