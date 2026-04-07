@@ -153,7 +153,7 @@ static bool ford_v0_verify_crc(uint64_t key1, uint16_t key2) {
     uint8_t calculated_crc = ford_v0_calculate_crc(buf);
     uint8_t received_crc = (uint8_t)(key2 & 0xFF) ^ 0x80;
 
-    return (calculated_crc == received_crc);
+    return ((calculated_crc & 0x7F) == (received_crc & 0x7F));
 }
 
 static uint8_t ford_v0_calculate_chk_from_buf(uint8_t* buf) {
