@@ -260,6 +260,13 @@ vars.AddVariables(
         "Official",
     ),
     (
+        "DESKTOP_STATUSBAR_BAR_BACKGROUND",
+        "Should we use the Desktop Bar Background in Build? "
+        " This will also create a C define DESKTOP_STATUSBAR_BAR_BACKGROUND so that "
+        " app can check the define too.",
+        "ON or OFF",
+    ),
+    (
         "FLIP_PORT",
         "Full port name of Flipper to use, if multiple Flippers are connected",
         "auto",

@@ -1,6 +1,15 @@
 from pathlib import Path
 import posixpath
 
+# **************************************************************************
+# *                                                                        *
+# *                                                                        *
+# *                 Leeroy's Custom Firmware Options                       *
+# *                                                                        *
+# *                                                                        *
+# **************************************************************************
+DESKTOP_STATUSBAR_BAR_BACKGROUND = "OFF"
+
 # For more details on these options, run 'fbt -h'
 
 FIRMWARE_ORIGIN = "ARF"

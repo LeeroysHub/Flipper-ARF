@@ -117,6 +117,12 @@ env.Append(
     ]
 )
 
+if env["DESKTOP_STATUSBAR_BAR_BACKGROUND"] == "ON":
+    env.Append(
+        CPPDEFINES=[
+            "DESKTOP_STATUSBAR_BAR_BACKGROUND",
+        ],
+    )
 
 # Now, env is fully set up with everything to build apps
 fwenv = env.Clone(FW_ARTIFACTS=[])
