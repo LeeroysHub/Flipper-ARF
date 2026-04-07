@@ -267,6 +267,13 @@ vars.AddVariables(
         "ON or OFF",
     ),
     (
+        "DESKTOP_OK_TO_SELECT_ANIMATON",
+        "Should we allow the OK to change Desktop Animation in Build? "
+        " This will also create a C define DESKTOP_OK_TO_SELECT_ANIMATON so that "
+        " app can check the define too.",
+        "ON or OFF",
+    ),
+    (
         "FLIP_PORT",
         "Full port name of Flipper to use, if multiple Flippers are connected",
         "auto",
