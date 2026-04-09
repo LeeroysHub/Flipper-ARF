@@ -5,10 +5,14 @@ void infrared_scene_learn_done_on_enter(void* context) {
     Popup* popup = infrared->popup;
 
     if(infrared->app_state.is_learning_new_remote) {
-        // [NO_DOLPHIN] popup_set_icon(popup, 48, 6, &I_DolphinDone_80x58);
+#ifndef GUI_REMOVE_DOLPHINS
+        popup_set_icon(popup, 48, 6, &I_DolphinDone_80x58);
+#endif
         popup_set_header(popup, "Success!", 10, 12, AlignLeft, AlignTop);
     } else {
-        // [NO_DOLPHIN] popup_set_icon(popup, 36, 5, &I_DolphinSaved_92x58);
+#ifndef GUI_REMOVE_DOLPHINS
+        popup_set_icon(popup, 36, 5, &I_DolphinSaved_92x58);
+#endif
         popup_set_header(popup, "Saved", 15, 19, AlignLeft, AlignBottom);
     }
 

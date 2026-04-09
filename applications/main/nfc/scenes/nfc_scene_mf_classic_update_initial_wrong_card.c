@@ -16,7 +16,9 @@ void nfc_scene_mf_classic_update_initial_wrong_card_on_enter(void* context) {
 
     notification_message(instance->notifications, &sequence_error);
 
-    // [NO_DOLPHIN] widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+    widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#endif
     widget_add_string_element(widget, 3, 4, AlignLeft, AlignTop, FontPrimary, "Wrong Card!");
     widget_add_string_multiline_element(
         widget,

@@ -7,7 +7,9 @@ void lfrfid_scene_save_success_on_enter(void* context) {
     // Clear state of data enter scene
     scene_manager_set_scene_state(app->scene_manager, LfRfidSceneSaveData, 0);
 
-    // [NO_DOLPHIN] popup_set_icon(popup, 36, 5, &I_DolphinSaved_92x58);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 36, 5, &I_DolphinSaved_92x58);
+#endif
     popup_set_header(popup, "Saved", 15, 19, AlignLeft, AlignBottom);
     popup_set_context(popup, app);
     popup_set_callback(popup, lfrfid_popup_timeout_callback);

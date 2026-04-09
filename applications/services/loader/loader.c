@@ -113,7 +113,9 @@ static void loader_show_gui_error(
         }
         furi_record_close(RECORD_STORAGE);
         dialog_message_set_header(message, header, 64, 3, AlignCenter, AlignTop);
-        // [NO_DOLPHIN] dialog_message_set_icon(message, &I_WarningDolphinFlip_45x42, 83, 22);
+#ifndef GUI_REMOVE_DOLPHINS
+        dialog_message_set_icon(message, &I_WarningDolphinFlip_45x42, 83, 22);
+#endif
         dialog_message_set_text(message, text, 3, 26, AlignLeft, AlignTop);
         dialog_message_show(dialogs, message);
     } else if(status.value == LoaderStatusErrorUnknownApp) {

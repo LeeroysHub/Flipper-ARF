@@ -281,6 +281,13 @@ vars.AddVariables(
         "ON or OFF",
     ),
     (
+        "GUI_REMOVE_DOLPHINS",
+        "Should we compile the Dolphin Pictures into the Firmware? "
+        " This will also create a C define GUI_REMOVE_DOLPHINS so that "
+        " app can check the define too.",
+        "ON or OFF",
+    ),
+    (
         "FLIP_PORT",
         "Full port name of Flipper to use, if multiple Flippers are connected",
         "auto",

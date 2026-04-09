@@ -7,10 +7,10 @@
 #include <assets_icons.h>
 #include <m-array.h>
 
-#define FRAME_HEIGHT              12
-#define MAX_LEN_PX                111
-#define MENU_ITEMS                4u
-#define UNLOCK_CNT                3
+#define FRAME_HEIGHT                12
+#define MAX_LEN_PX                  111
+#define MENU_ITEMS                  4u
+#define UNLOCK_CNT                  3
 #define SUBGHZ_RX_RSSI_HISTORY_SIZE 128
 
 // #define SUBGHZ_RAW_THRESHOLD_MIN (-90.0f)
@@ -347,28 +347,26 @@ void subghz_view_receiver_draw(Canvas* canvas, SubGhzViewReceiverModel* model) {
             canvas_set_font(canvas, FontPrimary);
             char freq_mhz[32];
             snprintf(
-                freq_mhz,
-                sizeof(freq_mhz),
-                "%s MHz",
-                furi_string_get_cstr(model->frequency_str));
+                freq_mhz, sizeof(freq_mhz), "%s MHz", furi_string_get_cstr(model->frequency_str));
             canvas_draw_str_aligned(canvas, 64, 45, AlignCenter, AlignBottom, freq_mhz);
 
             // Scan mode label
             canvas_set_font(canvas, FontSecondary);
             canvas_draw_str_aligned(
-                canvas,
-                1,
-                1,
-                AlignLeft,
-                AlignTop,
-                model->hopping_enabled ? "[Hopping]" : "[Fix]");
+                canvas, 1, 1, AlignLeft, AlignTop, model->hopping_enabled ? "[Hopping]" : "[Fix]");
 
             if(model->bin_raw_enabled) {
                 canvas_draw_icon(canvas, 118, 17, &I_Cos_9x7);
             }
         } else {
-            // [NO_DOLPHIN] canvas_draw_icon(canvas, 0, 0,
-            //     (model->device_type == SubGhzRadioDeviceTypeInternal) ? &I_Scanning_123x52 : &I_Fishing_123x52);
+#ifndef GUI_REMOVE_DOLPHINS
+            canvas_draw_icon(
+                canvas,
+                0,
+                0,
+                (model->device_type == SubGhzRadioDeviceTypeInternal) ? &I_Scanning_123x52 :
+                                                                        &I_Fishing_123x52);
+#endif
             canvas_set_font(canvas, FontPrimary);
             canvas_draw_str(canvas, 63, 46, "Decoding...");
             canvas_set_font(canvas, FontSecondary);
@@ -414,7 +412,7 @@ void subghz_view_receiver_draw(Canvas* canvas, SubGhzViewReceiverModel* model) {
         canvas_draw_icon(canvas, 65, 42, &I_Pin_back_arrow_10x8);
         canvas_draw_icon(canvas, 80, 42, &I_Pin_back_arrow_10x8);
         canvas_draw_icon(canvas, 95, 42, &I_Pin_back_arrow_10x8);
-        // [NO_DOLPHIN] canvas_draw_icon(canvas, 16, 13, &I_WarningDolphin_45x42);
+        canvas_draw_icon(canvas, 16, 13, &I_WarningDolphin_45x42);
         canvas_draw_dot(canvas, 17, 61);
         break;
     case SubGhzViewReceiverBarShowUnlock:

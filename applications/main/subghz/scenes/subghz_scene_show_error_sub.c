@@ -11,7 +11,9 @@ void subghz_scene_show_error_sub_on_enter(void* context) {
 
     // Setup view
     Popup* popup = subghz->popup;
-    // [NO_DOLPHIN] popup_set_icon(popup, 83, 22, &I_WarningDolphinFlip_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 83, 22, &I_WarningDolphinFlip_45x42);
+#endif
     popup_set_header(popup, furi_string_get_cstr(subghz->error_str), 14, 15, AlignLeft, AlignTop);
     popup_set_timeout(popup, 1500);
     popup_set_context(popup, subghz);

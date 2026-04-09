@@ -128,7 +128,9 @@ static void desktop_view_locked_draw(Canvas* canvas, void* model) {
         canvas_draw_icon(canvas, 65, 36 + STATUS_BAR_Y_SHIFT, &I_Pin_back_arrow_10x8);
         canvas_draw_icon(canvas, 80, 36 + STATUS_BAR_Y_SHIFT, &I_Pin_back_arrow_10x8);
         canvas_draw_icon(canvas, 95, 36 + STATUS_BAR_Y_SHIFT, &I_Pin_back_arrow_10x8);
-        // [NO_DOLPHIN] canvas_draw_icon(canvas, 16, 7 + STATUS_BAR_Y_SHIFT, &I_WarningDolphin_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+        canvas_draw_icon(canvas, 16, 7 + STATUS_BAR_Y_SHIFT, &I_WarningDolphin_45x42);
+#endif
         canvas_draw_dot(canvas, 17, 61);
     } else if(view_state == DesktopViewLockedStateUnlockedHintShown) {
         canvas_set_font(canvas, FontPrimary);

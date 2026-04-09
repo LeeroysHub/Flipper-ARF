@@ -35,8 +35,10 @@ void hid_scene_unpair_on_enter(void* context) {
     dialog_ex_set_left_button_text(app->dialog, "Back");
     dialog_ex_set_right_button_text(app->dialog, "Unpair");
 
-    // Un-pair success popup view
-    // [NO_DOLPHIN] popup_set_icon(app->popup, 48, 6, &I_DolphinDone_80x58);
+// Un-pair success popup view
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(app->popup, 48, 6, &I_DolphinDone_80x58);
+#endif
     popup_set_header(app->popup, "Done", 14, 15, AlignLeft, AlignTop);
     popup_set_timeout(app->popup, 1500);
     popup_set_context(app->popup, app);

@@ -54,7 +54,9 @@ void nfc_scene_mf_classic_mfkey_complete_on_enter(void* context) {
             AlignTop,
             FontSecondary,
             "Now run Mfkey32\n to extract \nkeys");
-        // [NO_DOLPHIN] widget_add_icon_element(instance->widget, 5, 18, &I_WarningDolphin_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+        widget_add_icon_element(instance->widget, 5, 18, &I_WarningDolphin_45x42);
+#endif
         widget_add_button_element(
             instance->widget,
             GuiButtonTypeRight,
