@@ -157,8 +157,10 @@ static void submenu_view_draw_callback(Canvas* canvas, void* _model) {
         canvas_draw_box(canvas, frame_x + 2, frame_y + 2, frame_width - 4, frame_height - 4);
 
         canvas_set_color(canvas, ColorBlack);
-        // [NO_DOLPHIN] canvas_draw_icon(canvas, frame_x + 2, canvas_height(canvas) - frame_y - 2 - 42, &I_WarningDolphin_45x42);
-
+#ifndef GUI_REMOVE_DOLPHINS
+        canvas_draw_icon(
+            canvas, frame_x + 2, canvas_height(canvas) - frame_y - 2 - 42, &I_WarningDolphin_45x42);
+#endif
         canvas_draw_rframe(canvas, frame_x, frame_y, frame_width, frame_height, 3);
         canvas_draw_rframe(canvas, frame_x + 1, frame_y + 1, frame_width - 2, frame_height - 2, 2);
         elements_multiline_text_aligned(

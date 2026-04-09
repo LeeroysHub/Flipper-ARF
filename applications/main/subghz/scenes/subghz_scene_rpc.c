@@ -29,7 +29,9 @@ static void subghz_scene_rpc_emulation_show(SubGhz* subghz) {
 
     subghz_format_file_name_tmp(subghz);
     popup_set_header(popup, "Sub-GHz", 89, 42, AlignCenter, AlignBottom);
-    // [NO_DOLPHIN] popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#endif
     popup_set_text(popup, subghz->file_name_tmp, 89, 44, AlignCenter, AlignTop);
 
     view_dispatcher_switch_to_view(subghz->view_dispatcher, SubGhzViewIdPopup);

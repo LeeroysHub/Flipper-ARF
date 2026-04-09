@@ -12,7 +12,9 @@ void lfrfid_scene_emulate_on_enter(void* context) {
         protocol_dict_get_name(app->dict, app->protocol_id),
         furi_string_empty(app->file_name) ? "Unsaved Tag" : furi_string_get_cstr(app->file_name));
 
-    // [NO_DOLPHIN] widget_add_icon_element(widget, 0, 0, &I_NFC_dolphin_emulation_51x64);
+#ifndef GUI_REMOVE_DOLPHINS
+    widget_add_icon_element(widget, 0, 0, &I_NFC_dolphin_emulation_51x64);
+#endif
     widget_add_text_box_element(
         widget, 51, 6, 79, 50, AlignCenter, AlignTop, furi_string_get_cstr(display_text), false);
 

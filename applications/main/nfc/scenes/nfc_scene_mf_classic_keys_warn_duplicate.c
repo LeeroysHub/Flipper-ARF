@@ -11,7 +11,9 @@ void nfc_scene_mf_classic_keys_warn_duplicate_on_enter(void* context) {
 
     // Setup view
     Popup* popup = instance->popup;
-    // [NO_DOLPHIN] popup_set_icon(popup, 83, 22, &I_WarningDolphinFlip_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 83, 22, &I_WarningDolphinFlip_45x42);
+#endif
     popup_set_header(popup, "Key Already Exists!", 64, 3, AlignCenter, AlignTop);
     popup_set_text(
         popup,

@@ -149,6 +149,17 @@ if env["DESKTOP_OK_TO_SELECT_ANIMATON"] == "ON":
         ],
     )
 
+# GUI_REMOVE_DOLPHINS = ON or OFF
+if env["GUI_REMOVE_DOLPHINS"] == "ON":
+    env.Append(
+        CPPDEFINES=[
+            "GUI_REMOVE_DOLPHINS",
+        ],
+    )
+
+
+
+
 # Now, env is fully set up with everything to build apps
 fwenv = env.Clone(FW_ARTIFACTS=[])
 

@@ -772,7 +772,9 @@ static void nfc_protocol_support_scene_emulate_on_enter(NfcApp* instance) {
     FuriString* temp_str = furi_string_alloc();
     const NfcProtocol protocol = nfc_device_get_protocol(instance->nfc_device);
 
-    // [NO_DOLPHIN] widget_add_icon_element(widget, 0, 0, &I_NFC_dolphin_emulation_51x64);
+#ifndef GUI_REMOVE_DOLPHINS
+    widget_add_icon_element(widget, 0, 0, &I_NFC_dolphin_emulation_51x64);
+#endif
 
     if(nfc_protocol_support_has_feature(protocol, instance, NfcProtocolFeatureEmulateUid)) {
         widget_add_string_element(
@@ -949,7 +951,9 @@ static void nfc_protocol_support_scene_write_setup_view(NfcApp* instance) {
         popup_set_icon(popup, 12, 23, &A_Loading_24);
     } else if(state == NfcSceneWriteStateSuccess) {
         popup_set_header(popup, "Successfully\nwritten!", 126, 2, AlignRight, AlignTop);
-        // [NO_DOLPHIN] popup_set_icon(popup, 0, 9, &I_DolphinSuccess_91x55);
+#ifndef GUI_REMOVE_DOLPHINS
+        popup_set_icon(popup, 0, 9, &I_DolphinSuccess_91x55);
+#endif
         popup_set_timeout(popup, 1500);
         popup_set_context(popup, instance);
         popup_set_callback(popup, nfc_protocol_support_scene_write_popup_callback);
@@ -966,7 +970,9 @@ static void nfc_protocol_support_scene_write_setup_view(NfcApp* instance) {
             AlignTop,
             FontSecondary,
             furi_string_get_cstr(instance->text_box_store));
-        // [NO_DOLPHIN] widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+        widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#endif
         widget_add_button_element(
             widget,
             GuiButtonTypeLeft,
@@ -984,7 +990,9 @@ static void nfc_protocol_support_scene_write_setup_view(NfcApp* instance) {
             AlignTop,
             FontSecondary,
             furi_string_get_cstr(instance->text_box_store));
-        // [NO_DOLPHIN] widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#ifndef GUI_REMOVE_DOLPHINS
+        widget_add_icon_element(widget, 83, 22, &I_WarningDolphinFlip_45x42);
+#endif
         widget_add_button_element(
             widget,
             GuiButtonTypeLeft,
@@ -1088,7 +1096,9 @@ static void nfc_protocol_support_scene_rpc_setup_ui_and_emulate(NfcApp* instance
 
     popup_set_header(instance->popup, "NFC", 89, 42, AlignCenter, AlignBottom);
     popup_set_text(instance->popup, instance->text_store, 89, 44, AlignCenter, AlignTop);
-    // [NO_DOLPHIN] popup_set_icon(instance->popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(instance->popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#endif
 
     view_dispatcher_switch_to_view(instance->view_dispatcher, NfcViewPopup);
 

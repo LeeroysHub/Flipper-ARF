@@ -12,8 +12,9 @@ static void lfrfid_rpc_start_emulation(LfRfid* app) {
 
     popup_set_header(popup, "LF RFID", 89, 42, AlignCenter, AlignBottom);
     popup_set_text(popup, app->text_store, 89, 44, AlignCenter, AlignTop);
-    // [NO_DOLPHIN] popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
-
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#endif
     view_dispatcher_switch_to_view(app->view_dispatcher, LfRfidViewPopup);
 
     lfrfid_worker_start_thread(app->lfworker);

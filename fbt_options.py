@@ -12,6 +12,9 @@ DESKTOP_STATUSBAR_BAR_BACKGROUND = "OFF"
 DESKTOP_STATUSBAR_BAR_BORDERS = "ON"
 DESKTOP_OK_TO_SELECT_ANIMATON = "ON"
 
+# ARF Removes Dolphins from every screen, now its an option.
+GUI_REMOVE_DOLPHINS = "OFF"
+
 # For more details on these options, run 'fbt -h'
 
 FIRMWARE_ORIGIN = "ARF"

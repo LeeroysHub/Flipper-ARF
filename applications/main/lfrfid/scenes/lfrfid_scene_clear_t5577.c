@@ -11,7 +11,9 @@ static void lfrfid_clear_t5577_password_and_config_to_EM(LfRfid* app) {
     const uint32_t* default_passwords = lfrfid_get_t5577_default_passwords(&default_passwords_len);
 
     popup_set_header(popup, "Removing\npassword", 90, 36, AlignCenter, AlignCenter);
-    // [NO_DOLPHIN] popup_set_icon(popup, 0, 3, &I_RFIDDolphinSend_97x61);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 0, 3, &I_RFIDDolphinSend_97x61);
+#endif
     popup_set_text(popup, curr_buf, 90, 56, AlignCenter, AlignCenter);
     notification_message(app->notifications, &sequence_blink_start_magenta);
 
@@ -51,7 +53,9 @@ void lfrfid_scene_clear_t5577_on_enter(void* context) {
 
     notification_message(app->notifications, &sequence_success);
     popup_set_header(popup, "Success!", 75, 10, AlignLeft, AlignTop);
-    // [NO_DOLPHIN] popup_set_icon(popup, 0, 9, &I_DolphinSuccess_91x55);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 0, 9, &I_DolphinSuccess_91x55);
+#endif
     popup_set_context(popup, app);
     popup_set_callback(popup, lfrfid_popup_timeout_callback);
     popup_set_timeout(popup, 1500);

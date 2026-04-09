@@ -30,7 +30,9 @@ static void infrared_scene_rpc_show(InfraredApp* infrared) {
     popup_set_text(popup, "RPC mode", 89, 44, AlignCenter, AlignTop);
     popup_set_text(popup, infrared->text_store[0], 89, 44, AlignCenter, AlignTop);
 
-    // [NO_DOLPHIN] popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#ifndef GUI_REMOVE_DOLPHINS
+    popup_set_icon(popup, 0, 12, &I_RFIDDolphinSend_97x61);
+#endif
 
     popup_set_context(popup, infrared);
     popup_set_callback(popup, infrared_popup_closed_callback);
