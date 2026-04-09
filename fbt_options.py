@@ -16,6 +16,7 @@ DESKTOP_OK_TO_SELECT_ANIMATON = "ON"
 
 # ARF Removes Dolphins from every screen, now its an option.
 GUI_REMOVE_DOLPHINS = "OFF"
+GUI_SUBGHZ_WAVEFORM_VIEW = "OFF"
 
 # For more details on these options, run 'f bt -h'
 
