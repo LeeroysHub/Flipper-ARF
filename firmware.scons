@@ -157,8 +157,13 @@ if env["GUI_REMOVE_DOLPHINS"] == "ON":
         ],
     )
 
-
-
+# GUI_SUBGHZ_WAVEFORM_VIEW = ON or OFF
+if env["GUI_SUBGHZ_WAVEFORM_VIEW"] == "ON":
+    env.Append(
+        CPPDEFINES=[
+            "GUI_SUBGHZ_WAVEFORM_VIEW",
+        ],
+    )
 
 # Now, env is fully set up with everything to build apps
 fwenv = env.Clone(FW_ARTIFACTS=[])

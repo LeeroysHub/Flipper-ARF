@@ -281,6 +281,13 @@ vars.AddVariables(
         "ON or OFF",
     ),
     (
+        "GUI_SUBGHZ_WAVEFORM_VIEW",
+        "Should we use the Waveform View from ARF in Build? "
+        " This will also create a C define GUI_SUBGHZ_WAVEFORM_VIEW so that "
+        " app can check the define too.",
+        "ON or OFF",
+    ),
+    (
         "GUI_REMOVE_DOLPHINS",
         "Should we compile the Dolphin Pictures into the Firmware? "
         " This will also create a C define GUI_REMOVE_DOLPHINS so that "
