@@ -8,6 +8,8 @@ import posixpath
 # *                                                                        *
 # *                                                                        *
 # **************************************************************************
+
+#Desktop Options
 DESKTOP_STATUSBAR_BAR_BACKGROUND = "OFF"
 DESKTOP_STATUSBAR_BAR_BORDERS = "ON"
 DESKTOP_OK_TO_SELECT_ANIMATON = "ON"
@@ -15,7 +17,7 @@ DESKTOP_OK_TO_SELECT_ANIMATON = "ON"
 # ARF Removes Dolphins from every screen, now its an option.
 GUI_REMOVE_DOLPHINS = "OFF"
 
-# For more details on these options, run 'fbt -h'
+# For more details on these options, run 'f bt -h'
 
 FIRMWARE_ORIGIN = "ARF"
 
@@ -30,7 +32,7 @@ DEBUG = 1
 
 # Suffix to add to files when building distribution
 # If OS environment has DIST_SUFFIX set, it will be used instead
-DIST_SUFFIX = "local"
+DIST_SUFFIX = "leeroy"
 
 # Coprocessor firmware
 COPRO_OB_DATA = "scripts/ob.data"
