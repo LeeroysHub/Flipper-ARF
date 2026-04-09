@@ -263,12 +263,16 @@ static void subghz_view_receiver_draw_frame(Canvas* canvas, uint16_t idx, bool s
 }
 
 static void subghz_view_rssi_draw(Canvas* canvas, SubGhzViewReceiverModel* model) {
+    //Add a 1px space between the segments
+    uint8_t spacer = 0;
     for(uint8_t i = 1; i < model->u_rssi; i++) {
         if(i % 5) {
-            canvas_draw_dot(canvas, 46 + i, 50);
-            canvas_draw_dot(canvas, 47 + i, 51);
-            canvas_draw_dot(canvas, 46 + i, 52);
-        }
+            uint8_t j = 46 + i + spacer;
+            canvas_draw_dot(canvas, j, 52);
+            canvas_draw_dot(canvas, j + 1, 53);
+            canvas_draw_dot(canvas, j, 54);
+        } else
+            spacer++;
     }
 }
 
