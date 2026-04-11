@@ -166,13 +166,13 @@ static uint8_t ford_v0_calculate_chk_from_buf(uint8_t* buf) {
 static uint8_t ford_v0_get_button_code(uint8_t custom_btn) {
     switch(custom_btn) {
     case 1:
-        return 0x01;
-    case 2:
         return 0x02;
-    case 3:
+    case 2:
         return 0x04;
+    case 3:
+        return 0x08;
     case 4:
-        return 0;
+        return 0x01;
     default:
         return 0x01;
     }
@@ -180,13 +180,13 @@ static uint8_t ford_v0_get_button_code(uint8_t custom_btn) {
 
 static uint8_t ford_v0_btn_to_custom(uint8_t btn_code) {
     switch(btn_code) {
-    case 0x00:
-        return 4;
     case 0x01:
-        return 1;
+        return 4;
     case 0x02:
-        return 2;
+        return 1;
     case 0x04:
+        return 2;
+    case 0x08:
         return 3;
     default:
         return 1;
@@ -255,9 +255,9 @@ static void decode_ford_v0(
     *serial = ((serial_le & 0xFF) << 24) | (((serial_le >> 8) & 0xFF) << 16) |
               (((serial_le >> 16) & 0xFF) << 8) | ((serial_le >> 24) & 0xFF);
 
-    *button = (buf[5] >> 4) & 0x0F;
+    *button = (buf[5] >> 3) & 0x0F;
 
-    *count = (((buf[5] & 0x0F) << 16) | (buf[6] << 8) | buf[7]) & 0xFFFF;
+    *count = (((buf[5] & 0x07) << 16) | (buf[6] << 8) | buf[7]) & 0xFFFF;
 }
 
 static bool ford_v0_process_data(SubGhzProtocolDecoderFordV0* instance) {
@@ -304,7 +304,7 @@ static void encode_ford_v0(
     buf[2] = (serial >> 16) & 0xFF;
     buf[3] = (serial >> 8) & 0xFF;
     buf[4] = serial & 0xFF;
-    buf[5] = ((button == 0) ? 8 : ((button & 0x0F) << 4)) | ((count >> 16) & 0x0F);
+    buf[5] = ((button & 0x0F) << 3) | ((count >> 16) & 0x0F);
     buf[6] = (count >> 8) & 0xFF;
     buf[7] = count & 0xFF;
 
@@ -707,13 +707,13 @@ SubGhzProtocolStatus
 
 static const char* ford_v0_get_button_name(uint8_t btn) {
     switch(btn) {
-    case 0x00:
-        return "Panic";
     case 0x01:
-        return "Lock";
+        return "Panic";
     case 0x02:
-        return "Unlock";
+        return "Lock";
     case 0x04:
+        return "Unlock";
+    case 0x08:
         return "Trunk";
     default:
         return "??";
