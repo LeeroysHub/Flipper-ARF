@@ -125,45 +125,16 @@ env.Append(
 # *                                                                        *
 # **************************************************************************
 
-# DESKTOP_STATUSBAR_BAR_BACKGROUND = ON or OFF
-if env["DESKTOP_STATUSBAR_BAR_BACKGROUND"] == "ON":
-    env.Append(
-        CPPDEFINES=[
-            "DESKTOP_STATUSBAR_BAR_BACKGROUND",
-        ],
-    )
+# List of (FW BUILD FLAGS)
+fw_build_flags = [
+    "DESKTOP_STATUSBAR_BAR_BACKGROUND","DESKTOP_STATUSBAR_BAR_BORDERS", "DESKTOP_OK_TO_SELECT_ANIMATON",
+    "GUI_REMOVE_DOLPHINS","GUI_SUBGHZ_WAVEFORM_VIEW"
+]
 
-# DESKTOP_STATUSBAR_BAR_BORDERS = ON or OFF
-if env["DESKTOP_STATUSBAR_BAR_BORDERS"] == "ON":
-    env.Append(
-        CPPDEFINES=[
-            "DESKTOP_STATUSBAR_BAR_BORDERS",
-        ],
-    )
-
-# DESKTOP_OK_TO_SELECT_ANIMATON = ON or OFF
-if env["DESKTOP_OK_TO_SELECT_ANIMATON"] == "ON":
-    env.Append(
-        CPPDEFINES=[
-            "DESKTOP_OK_TO_SELECT_ANIMATON",
-        ],
-    )
-
-# GUI_REMOVE_DOLPHINS = ON or OFF
-if env["GUI_REMOVE_DOLPHINS"] == "ON":
-    env.Append(
-        CPPDEFINES=[
-            "GUI_REMOVE_DOLPHINS",
-        ],
-    )
-
-# GUI_SUBGHZ_WAVEFORM_VIEW = ON or OFF
-if env["GUI_SUBGHZ_WAVEFORM_VIEW"] == "ON":
-    env.Append(
-        CPPDEFINES=[
-            "GUI_SUBGHZ_WAVEFORM_VIEW",
-        ],
-    )
+# Loop and append only ON flags
+for key in fw_build_flags:
+    if env[key] == "ON":
+        env.Append(CPPDEFINES=[key])
 
 # Now, env is fully set up with everything to build apps
 fwenv = env.Clone(FW_ARTIFACTS=[])
