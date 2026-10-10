@@ -1,0 +1,26 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build firmware
+        run: |
+          # build flags
+          BUILD_TYPE="DEBUG=0 COMPACT=1"
+
+          ./fbt $BUILD_TYPE updater_package
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: dist/f7-*/**
